@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from clinical_safeguard.core.exceptions import ResourceLoadError, StageExecutionError
-from clinical_safeguard.models import Label, PromptInput
-from clinical_safeguard.stages.semantic import SemanticBERTStage, _DEFAULT_LABEL_MAP
+from src.core.exceptions import ResourceLoadError, StageExecutionError
+from src.models import Label, PromptInput
+from src.stages.semantic import SemanticBERTStage, _DEFAULT_LABEL_MAP
 
 
 # ---------------------------------------------------------------------------

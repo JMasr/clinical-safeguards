@@ -8,9 +8,9 @@ from typing import NamedTuple
 import yaml
 from flashtext import KeywordProcessor
 
-from clinical_safeguard.core.base import GuardrailStage
-from clinical_safeguard.core.exceptions import ResourceLoadError, StageExecutionError
-from clinical_safeguard.models import Label, PromptInput, StageResult
+from src.core.base import GuardrailStage
+from src.core.exceptions import ResourceLoadError, StageExecutionError
+from src.models import Label, PromptInput, StageResult
 
 logger = logging.getLogger(__name__)
 

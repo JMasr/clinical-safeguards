@@ -8,11 +8,11 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
 
-from clinical_safeguard.config import initialize_hf_services, Settings, get_settings
-from clinical_safeguard.core import SafeguardPipeline
-from clinical_safeguard.core.exceptions import ResourceLoadError
-from clinical_safeguard.stages.deterministic import DeterministicStage
-from clinical_safeguard.stages.semantic import SemanticBERTStage
+from src.config import initialize_hf_services, Settings, get_settings
+from src.core import SafeguardPipeline
+from src.core.exceptions import ResourceLoadError
+from src.stages.deterministic import DeterministicStage
+from src.stages.semantic import SemanticBERTStage
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response.headers["X-Correlation-ID"] = correlation_id
         return response
 
-    from clinical_safeguard.api.router import router  # noqa: PLC0415
+    from src.api.router import router  # noqa: PLC0415
     app.include_router(router)
 
     return app

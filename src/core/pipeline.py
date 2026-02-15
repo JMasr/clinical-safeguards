@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 from typing import Sequence
 
-from clinical_safeguard.core.base import GuardrailStage
-from clinical_safeguard.core.exceptions import StageExecutionError
-from clinical_safeguard.models import (
+from src.core.base import GuardrailStage
+from src.core.exceptions import StageExecutionError
+from src.models import (
     FinalResponse,
     Label,
     LABEL_PRECEDENCE,

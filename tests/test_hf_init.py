@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from clinical_safeguard.config import initialize_hf_services
-from clinical_safeguard.core.exceptions import ResourceLoadError
+from src.config import initialize_hf_services
+from src.core.exceptions import ResourceLoadError
 
 
 def _token(value: str = "hf_testtoken") -> SecretStr:

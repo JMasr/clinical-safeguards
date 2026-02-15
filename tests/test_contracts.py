@@ -3,14 +3,14 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from clinical_safeguard.config.settings import get_settings
-from clinical_safeguard.core.exceptions import (
+from src.config.settings import get_settings
+from src.core.exceptions import (
     ResourceLoadError,
     SafeguardError,
     StageExecutionError,
 )
-from clinical_safeguard.models import Label, ResponseCode
-from clinical_safeguard.models.response import PromptInput, StageResult
+from src.models import Label, ResponseCode
+from src.models.response import PromptInput, StageResult
 
 
 # ---------------------------------------------------------------------------

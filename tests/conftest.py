@@ -30,7 +30,7 @@ from typing import Any
 import pytest
 from dotenv import dotenv_values  # type: ignore[import]
 
-from clinical_safeguard.models import Label, PromptInput, StageResult
+from src.models import Label, PromptInput, StageResult
 
 # ---------------------------------------------------------------------------
 # Locate the project root .env file
@@ -77,7 +77,7 @@ def make_settings(**kwargs: Any):
     Passes _env_file=None to prevent pydantic-settings from re-reading
     the .env from disk (os.environ is already populated by load_env_file).
     """
-    from clinical_safeguard.config.settings import Settings  # noqa: PLC0415
+    from src.config.settings import Settings  # noqa: PLC0415
     return Settings(_env_file=None, **kwargs)
 
 

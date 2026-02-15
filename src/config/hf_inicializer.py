@@ -26,7 +26,7 @@ def initialize_hf_services(hf_token: SecretStr) -> None:
       https://huggingface.co/docs/huggingface_hub/en/guides/cli#login
       https://huggingface.co/docs/transformers/en/installation#using-a-specific-token
     """
-    from clinical_safeguard.core.exceptions import ResourceLoadError  # noqa: PLC0415
+    from src.core.exceptions import ResourceLoadError  # noqa: PLC0415
 
     try:
         import huggingface_hub  # noqa: PLC0415

@@ -6,10 +6,10 @@ from unittest.mock import patch
 
 import pytest
 
-from clinical_safeguard.config import RESOURCES
-from clinical_safeguard.core.exceptions import ResourceLoadError, StageExecutionError
-from clinical_safeguard.models import Label, PromptInput
-from clinical_safeguard.stages.deterministic import DeterministicStage
+from src.config import RESOURCES
+from src.core.exceptions import ResourceLoadError, StageExecutionError
+from src.models import Label, PromptInput
+from src.stages.deterministic import DeterministicStage
 
 # ---------------------------------------------------------------------------
 # Fixtures — minimal in-memory YAML resources

@@ -4,9 +4,9 @@ import logging
 import threading
 from typing import Any
 
-from clinical_safeguard.core.base import GuardrailStage
-from clinical_safeguard.core.exceptions import ResourceLoadError, StageExecutionError
-from clinical_safeguard.models import Label, PromptInput, StageResult
+from src.core.base import GuardrailStage
+from src.core.exceptions import ResourceLoadError, StageExecutionError
+from src.models import Label, PromptInput, StageResult
 
 logger = logging.getLogger(__name__)
 

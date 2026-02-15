@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from clinical_safeguard.models import FinalResponse, PromptInput
+from src.models import FinalResponse, PromptInput
 
 logger = logging.getLogger(__name__)
 

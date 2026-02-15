@@ -13,17 +13,17 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from clinical_safeguard.api.app import create_app
-from clinical_safeguard.core import SafeguardPipeline
-from clinical_safeguard.models import (
+from src.api.app import create_app
+from src.core import SafeguardPipeline
+from src.models import (
     FinalResponse,
     Label,
     ResponseCode,
     ResponseData,
 )
-from clinical_safeguard.stages.deterministic import DeterministicStage
-from clinical_safeguard.stages.semantic import SemanticBERTStage
-from clinical_safeguard.config import RESOURCES
+from src.stages.deterministic import DeterministicStage
+from src.stages.semantic import SemanticBERTStage
+from src.config import RESOURCES
 
 
 # ---------------------------------------------------------------------------

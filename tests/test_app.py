@@ -11,9 +11,9 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from clinical_safeguard.api.app import _build_pipeline, _configure_logging, create_app
-from clinical_safeguard.config.settings import Settings, get_settings, RESOURCES
-from clinical_safeguard.core.exceptions import ResourceLoadError
+from src.api.app import _build_pipeline, _configure_logging, create_app
+from src.config.settings import Settings, get_settings, RESOURCES
+from src.core.exceptions import ResourceLoadError
 from tests.conftest import make_settings
 
 
@@ -106,7 +106,7 @@ class TestLifespan:
     def test_lifespan_startup_loads_pipeline_into_app_state(self) -> None:
         settings = _test_settings(enable_bert=False)
 
-        with patch("clinical_safeguard.api.app.get_settings", return_value=settings):
+        with patch("src.api.app.get_settings", return_value=settings):
             app = create_app()
             with TestClient(app) as client:
                 assert hasattr(app.state, "safeguard_pipeline")
@@ -116,8 +116,8 @@ class TestLifespan:
     def test_lifespan_calls_hf_init_when_bert_enabled(self) -> None:
         settings = _test_settings(enable_bert=True, hf_token="hf_testtoken")
 
-        with patch("clinical_safeguard.api.app.get_settings", return_value=settings), \
-                patch("clinical_safeguard.api.app.initialize_hf_services") as mock_init:
+        with patch("src.api.app.get_settings", return_value=settings), \
+                patch("src.api.app.initialize_hf_services") as mock_init:
             app = create_app()
             with TestClient(app):
                 mock_init.assert_called_once_with(settings.hf_token)
@@ -125,8 +125,8 @@ class TestLifespan:
     def test_lifespan_skips_hf_init_when_bert_disabled(self) -> None:
         settings = _test_settings(enable_bert=False)
 
-        with patch("clinical_safeguard.api.app.get_settings", return_value=settings), \
-                patch("clinical_safeguard.api.app.initialize_hf_services") as mock_init:
+        with patch("src.api.app.get_settings", return_value=settings), \
+                patch("src.api.app.initialize_hf_services") as mock_init:
             app = create_app()
             with TestClient(app):
                 mock_init.assert_not_called()
@@ -140,7 +140,7 @@ class TestLifespan:
             SAFEGUARD_BYPASS_PATTERNS=str(tmp_path / "no.yaml"),
             SAFEGUARD_ENABLE_BERT="false",
         )
-        with patch("clinical_safeguard.api.app.get_settings", return_value=bad_settings):
+        with patch("src.api.app.get_settings", return_value=bad_settings):
             app = create_app()
             with pytest.raises(Exception):
                 with TestClient(app, raise_server_exceptions=True):

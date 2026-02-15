@@ -4,12 +4,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from clinical_safeguard.core import (
+from src.core import (
     GuardrailStage,
     SafeguardPipeline,
     StageExecutionError,
 )
-from clinical_safeguard.models import (
+from src.models import (
     FinalResponse,
     Label,
     PromptInput,

@@ -26,11 +26,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from clinical_safeguard.core import SafeguardPipeline
-from clinical_safeguard.config import RESOURCES
-from clinical_safeguard.models import FinalResponse, Label, PromptInput, ResponseCode
-from clinical_safeguard.stages.deterministic import DeterministicStage
-from clinical_safeguard.stages.semantic import SemanticBERTStage
+from src.core import SafeguardPipeline
+from src.config import RESOURCES
+from src.models import FinalResponse, Label, PromptInput, ResponseCode
+from src.stages.deterministic import DeterministicStage
+from src.stages.semantic import SemanticBERTStage
 
 
 # ---------------------------------------------------------------------------

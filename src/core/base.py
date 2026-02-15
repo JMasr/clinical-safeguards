@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from clinical_safeguard.models import PromptInput, StageResult
+from src.models import PromptInput, StageResult
 
 
 class GuardrailStage(ABC):
