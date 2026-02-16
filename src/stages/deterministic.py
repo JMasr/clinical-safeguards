@@ -8,8 +8,7 @@ from typing import NamedTuple
 import yaml
 from flashtext import KeywordProcessor
 
-from src.core.base import GuardrailStage
-from src.core.exceptions import ResourceLoadError, StageExecutionError
+from src.core import GuardrailStage, ResourceLoadError, StageExecutionError
 from src.models import Label, PromptInput, StageResult
 
 logger = logging.getLogger(__name__)
@@ -51,10 +50,14 @@ class DeterministicStage(GuardrailStage):
 
     def __init__(
             self,
-            keywords_crisis_path: Path,
-            keywords_malign_path: Path,
-            bypass_patterns_path: Path,
+            keywords_crisis_path: Path | str,
+            keywords_malign_path: Path | str,
+            bypass_patterns_path: Path | str,
     ) -> None:
+        # OmegaConf passes strings even for Path-typed fields — coerce explicitly.
+        keywords_crisis_path = Path(keywords_crisis_path)
+        keywords_malign_path = Path(keywords_malign_path)
+        bypass_patterns_path = Path(bypass_patterns_path)
         try:
             self._crisis_processor = self._build_keyword_processor(
                 keywords_crisis_path, label="crisis"
