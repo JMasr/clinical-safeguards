@@ -171,3 +171,55 @@ filtrar el input hacia el caller.
 - `TestClient` con `app.state` inyectado. Los tests HTTP no tocan el lifespan en la mayoría de casos — inyectan el
   pipeline directamente en `app.state`.
   Esto desacopla los tests de HTTP contract de los tests de startup, sin sacrificar cobertura.
+
+## Hydra: Configuración Dinámica
+
+Hydra resuelve dos cosas que pydantic-settings no puede:
+
+1. **Composición declarativa**: `pipeline` se describe como una lista ordenada de objetos en YAML, no como flags
+   booleanos. Pasar de 2 a 3 stages, o reordenarlos, es editar el YAML sin tocar Python.
+2. **Instanciación estructurada (_target_)**: Hydra puede instanciar clases Python directamente desde config via
+   hydra.utils.instantiate(). Cada stage se define con _target_: src.stages.semantic.SemanticBERTStage y sus
+   parámetros — esto es el mecanismo que garantiza que solo se pueden crear stages implementados. Si _target_ apunta a
+   una clase que no existe, Hydra falla en startup con un error claro.
+
+### Estructura de archivos a crear/modificar
+
+```
+clinical_safeguard/
+├── conf/                          # NUEVO — directorio raíz de Hydra
+│   ├── config.yaml                # NUEVO — config principal (referencia a grupos)
+│   ├── pipeline/                  # NUEVO — grupo de configuración del pipeline
+│   │   ├── default.yaml           # solo DeterministicStage
+│   │   ├── clinical.yaml          # Deterministic + SemanticBERT
+│   │   └── full.yaml              # Deterministic + SemanticBERT + AttackDetection
+│   └── app/                       # NUEVO — config de la app (host, puerto, etc.)
+│       └── default.yaml
+```
+
+## Fase Semántica
+
+### Modelo Crisis Clínica:
+
+- Modelo elegido: `mental/mental-bert-base-uncased`
+- Razones frente a las alternativas:
+    - fine-tuneado en datasets de crisis [(paper)](https://arxiv.org/abs/2110.15621).
+
+### Modelo Ataques:
+
+- Modelo elegido: `ProtectAI/deberta-v3-base-prompt-injection-v2`
+    - Número de parámetros: **0.2B** (Base)
+    - Arquitectura: DeBERTa v3 Base
+
+
+- Razones frente a las alternativas:
+    - Apache 2.0, entrenado en 7+ datasets públicos de seguridad, diseñado específicamente para detectar prompt
+      injection en aplicaciones LLM, labels documentados y estables.
+
+
+- Alternativas adicionales descartadas:
+    - [OWASP JAIL](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html) — no
+      es un modelo, sino un conjunto de patrones regex. Útil como referencia para los bypass patterns, pero no como
+      modelo de clasificación semántica.
+    - `meta-llama/Prompt-Guard-86M` requiere aceptar la licencia de Meta y tiene restricciones comerciales para +700M de
+      usuarios.
