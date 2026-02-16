@@ -1,0 +1,14 @@
+# pipeline/clinical.yaml
+# Deterministic + clinical mental-health semantic stage.
+# Requires: HF_TOKEN in environment.
+# Use for: standard clinical AI assistant deployments.
+stages:
+  - _target_: src.stages.deterministic.DeterministicStage
+    keywords_crisis_path: ${paths.crisis}
+    keywords_malign_path: ${paths.malign}
+    bypass_patterns_path: ${paths.bypass}
+
+  - _target_: src.stages.semantic.SemanticBERTStage
+    model_id: mental/mental-bert-base-uncased
+    threshold: 0.75
+    inference_timeout_s: 10

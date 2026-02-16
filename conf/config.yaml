@@ -1,0 +1,11 @@
+defaults:
+  - app: default
+  - pipeline: full   # default pipeline profile; override with pipeline=full etc.
+  - _self_
+
+# Global resource paths — referenced via ${paths.*} in stage configs.
+# Override per-environment via env vars or CLI: paths.crisis=/custom/path
+paths:
+  crisis:  resources/keywords_crisis.yaml
+  malign:  resources/keywords_malign.yaml
+  bypass:  resources/bypass_patterns.yaml

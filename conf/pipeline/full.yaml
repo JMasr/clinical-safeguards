@@ -1,0 +1,20 @@
+# pipeline/full.yaml
+# Deterministic + clinical BERT + LLM attack detection.
+# Requires: HF_TOKEN in environment.
+# Use for: deployments exposed to untrusted user input where
+#          prompt injection is a realistic threat.
+stages:
+  - _target_: src.stages.deterministic.DeterministicStage
+    keywords_crisis_path: ${paths.crisis}
+    keywords_malign_path: ${paths.malign}
+    bypass_patterns_path: ${paths.bypass}
+
+  - _target_: src.stages.semantic.SemanticBERTStage
+    model_id: mental/mental-bert-base-uncased
+    threshold: 0.75
+    inference_timeout_s: 10
+
+  - _target_: src.stages.attack_detection.AttackDetectionStage
+    model_id: ProtectAI/deberta-v3-base-prompt-injection-v2
+    threshold: 0.75
+    inference_timeout_s: 10

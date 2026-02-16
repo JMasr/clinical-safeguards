@@ -1,0 +1,9 @@
+# pipeline/default.yaml
+# Deterministic-only pipeline.
+# No HuggingFace models. No HF_TOKEN required.
+# Use for: local dev, CI without GPU, latency-critical deployments.
+stages:
+  - _target_: src.stages.deterministic.DeterministicStage
+    keywords_crisis_path: ${paths.crisis}
+    keywords_malign_path: ${paths.malign}
+    bypass_patterns_path: ${paths.bypass}
