@@ -77,7 +77,7 @@ def make_settings(**kwargs: Any):
     Passes _env_file=None to prevent pydantic-settings from re-reading
     the .env from disk (os.environ is already populated by load_env_file).
     """
-    from src.config.settings import Settings  # noqa: PLC0415
+    from src.config import Settings  # noqa: PLC0415
     return Settings(_env_file=None, **kwargs)
 
 
