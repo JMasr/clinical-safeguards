@@ -10,14 +10,14 @@ No real model is loaded. SemanticBERTStage receives a mock pipeline_factory.
 DeterministicStage uses the real YAML resource files from resources/.
 
 Scenarios covered:
-  1. Deterministic pass → BERT valid         → 100 Válida
+  1. Deterministic pass → BERT valid         → 100 Valid
   2. Deterministic pass → BERT crisis        → 406 Crisis
-  3. Deterministic pass → BERT malign        → 400 Maligna
+  3. Deterministic pass → BERT malign        → 400 Malign
   4. Deterministic crisis → BERT not called  → 406 Crisis   (short-circuit)
-  5. Deterministic malign → BERT not called  → 400 Maligna  (short-circuit)
+  5. Deterministic malign → BERT not called  → 400 Malign  (short-circuit)
   6. Deterministic pass → BERT timeout       → 500 Server Error (fail-closed)
   7. Deterministic pass → BERT OOM           → 500 Server Error (fail-closed)
-  8. Deterministic pass → BERT disabled      → 100 Válida   (single-stage pipeline)
+  8. Deterministic pass → BERT disabled      → 100 Valid   (single-stage pipeline)
 """
 
 import time
@@ -69,7 +69,7 @@ def _pipeline(*stages) -> SafeguardPipeline:
 
 
 # ---------------------------------------------------------------------------
-# 1. Full pass — both stages agree: Válida
+# 1. Full pass — both stages agree: Valid
 # ---------------------------------------------------------------------------
 
 class TestFullValidFlow:
@@ -81,10 +81,10 @@ class TestFullValidFlow:
 
         assert isinstance(response, FinalResponse)
         assert response.code == ResponseCode.VALID
-        assert response.etiqueta == Label.VALID
+        assert response.label == Label.VALID
         # Both stages return VALID — merge picks first max (deterministic, confidence=1.0)
-        assert response.data.score_confianza == pytest.approx(1.0)
-        assert response.data.texto_procesado == "What are some healthy coping strategies for anxiety?"
+        assert response.data.confidence_score == pytest.approx(1.0)
+        assert response.data.processed_text == "What are some healthy coping strategies for anxiety?"
 
     def test_clinical_question_passes_both_stages(self, det_stage: DeterministicStage) -> None:
         bert = _bert_stage([{"label": "LABEL_0", "score": 0.88}])
@@ -93,9 +93,9 @@ class TestFullValidFlow:
         response = pipeline.evaluate(_prompt("Can you explain the side effects of SSRIs?"))
 
         assert response.code == ResponseCode.VALID
-        assert response.etiqueta == Label.VALID
+        assert response.label == Label.VALID
 
-    def test_metadatos_reflect_bert_stage(self, det_stage: DeterministicStage) -> None:
+    def test_metadata_reflect_bert_stage(self, det_stage: DeterministicStage) -> None:
         bert = _bert_stage([{"label": "LABEL_0", "score": 0.90}])
         pipeline = _pipeline(det_stage, bert)
 
@@ -103,8 +103,8 @@ class TestFullValidFlow:
 
         # The winning stage in a full-pass is BERT (higher precedence tie → last wins
         # if equal, but here both are VALID so merge returns the max by precedence, which
-        # is still VALID — stage name in metadatos is the winning StageResult's stage_name)
-        assert response.data.metadatos["stage"] in ("deterministic", "semantic_bert")
+        # is still VALID — stage name in metadata is the winning StageResult's stage_name)
+        assert response.data.metadata["stage"] in ("deterministic", "semantic_bert")
 
 
 # ---------------------------------------------------------------------------
@@ -119,8 +119,8 @@ class TestBERTCrisisFlow:
         response = pipeline.evaluate(_prompt("I have been feeling very hopeless lately"))
 
         assert response.code == ResponseCode.CRISIS
-        assert response.etiqueta == Label.CRISIS
-        assert response.data.score_confianza == pytest.approx(0.94)
+        assert response.label == Label.CRISIS
+        assert response.data.confidence_score == pytest.approx(0.94)
 
     def test_bert_crisis_triggered_by_contains_model_info(
             self, det_stage: DeterministicStage
@@ -130,7 +130,7 @@ class TestBERTCrisisFlow:
 
         response = pipeline.evaluate(_prompt("I feel like giving up"))
 
-        assert "model:" in response.data.metadatos.get("triggered_by", "")
+        assert "model:" in response.data.metadata.get("triggered_by", "")
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +145,7 @@ class TestBERTMalignFlow:
         response = pipeline.evaluate(_prompt("I am very upset with my situation"))
 
         assert response.code == ResponseCode.MALIGN
-        assert response.etiqueta == Label.MALIGN
+        assert response.label == Label.MALIGN
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +172,7 @@ class TestDeterministicCrisisShortCircuit:
         response = pipeline.evaluate(_prompt("I want to kill myself tonight"))
 
         assert response.code == ResponseCode.CRISIS
-        assert response.etiqueta == Label.CRISIS
+        assert response.label == Label.CRISIS
         # BERT factory was NEVER called — short-circuit stopped the pipeline
         mock_factory.assert_not_called()
 
@@ -219,9 +219,9 @@ class TestBERTTimeoutFailClosed:
         response = pipeline.evaluate(_prompt("How can I manage stress better?"))
 
         assert response.code == ResponseCode.ERROR
-        assert response.etiqueta == Label.ERROR
-        assert response.data.texto_procesado == ""  # prompt not leaked on error
-        assert "Error de integridad" in response.data.metadatos["reason"]
+        assert response.label == Label.ERROR
+        assert response.data.processed_text == ""  # prompt not leaked on error
+        assert "System integrity error" in response.data.metadata["reason"]
 
     def test_bert_timeout_does_not_propagate_exception(
             self, det_stage: DeterministicStage
@@ -264,7 +264,7 @@ class TestBERTCrashFailClosed:
         response = pipeline.evaluate(_prompt("What is the recommended therapy for PTSD?"))
 
         assert response.code == ResponseCode.ERROR
-        assert response.etiqueta == Label.ERROR
+        assert response.label == Label.ERROR
 
     def test_bert_network_error_returns_500(self, det_stage: DeterministicStage) -> None:
         mock_factory = MagicMock(side_effect=OSError("Connection refused"))
@@ -324,11 +324,11 @@ class TestResponseContractIntegrity:
         d = response.model_dump()
 
         assert "code" in d
-        assert "etiqueta" in d
+        assert "label" in d
         assert "data" in d
-        assert "texto_procesado" in d["data"]
-        assert "score_confianza" in d["data"]
-        assert "metadatos" in d["data"]
+        assert "processed_text" in d["data"]
+        assert "confidence_score" in d["data"]
+        assert "metadata" in d["data"]
 
     def test_error_response_has_required_fields(self, det_stage: DeterministicStage) -> None:
         mock_factory = MagicMock(side_effect=RuntimeError("crash"))
@@ -342,8 +342,8 @@ class TestResponseContractIntegrity:
         d = response.model_dump()
 
         assert d["code"] == ResponseCode.ERROR
-        assert d["data"]["texto_procesado"] == ""
-        assert "reason" in d["data"]["metadatos"]
+        assert d["data"]["processed_text"] == ""
+        assert "reason" in d["data"]["metadata"]
 
     def test_response_codes_match_labels(self, det_stage: DeterministicStage) -> None:
         cases = [

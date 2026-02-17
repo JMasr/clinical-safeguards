@@ -160,8 +160,8 @@ class TestSettings:
 
 class TestEnums:
     def test_label_values(self) -> None:
-        assert Label.VALID == "Válida"
-        assert Label.MALIGN == "Maligna"
+        assert Label.VALID == "Valid"
+        assert Label.MALIGN == "Malign"
         assert Label.CRISIS == "Crisis"
         assert Label.ERROR == "Server Error"
 

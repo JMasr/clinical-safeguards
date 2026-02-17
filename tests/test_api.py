@@ -34,11 +34,11 @@ from src.config import RESOURCES
 def _fixed_response(label: Label, code: ResponseCode) -> FinalResponse:
     return FinalResponse(
         code=code,
-        etiqueta=label,
+        label=label,
         data=ResponseData(
-            texto_procesado="test prompt",
-            score_confianza=0.99,
-            metadatos={"stage": "mock"},
+            processed_text="test prompt",
+            confidence_score=0.99,
+            metadata={"stage": "mock"},
         ),
     )
 
@@ -127,11 +127,11 @@ class TestEvaluateEndpoint:
         body = response.json()
 
         assert "code" in body
-        assert "etiqueta" in body
+        assert "label" in body
         assert "data" in body
-        assert "texto_procesado" in body["data"]
-        assert "score_confianza" in body["data"]
-        assert "metadatos" in body["data"]
+        assert "processed_text" in body["data"]
+        assert "confidence_score" in body["data"]
+        assert "metadata" in body["data"]
 
     def test_valid_response_code_is_100(self) -> None:
         client = _make_client(Label.VALID, ResponseCode.VALID)
@@ -256,7 +256,7 @@ class TestFullStackHTTP:
         )
         assert response.status_code == 200
         assert response.json()["code"] == 100
-        assert response.json()["etiqueta"] == "Válida"
+        assert response.json()["label"] == "Valid"
 
     def test_crisis_keyword_end_to_end(self, real_client: TestClient) -> None:
         response = real_client.post(
@@ -264,7 +264,7 @@ class TestFullStackHTTP:
         )
         assert response.status_code == 200
         assert response.json()["code"] == 406
-        assert response.json()["etiqueta"] == "Crisis"
+        assert response.json()["label"] == "Crisis"
 
     def test_bypass_attempt_end_to_end(self, real_client: TestClient) -> None:
         response = real_client.post(
@@ -273,9 +273,9 @@ class TestFullStackHTTP:
         )
         assert response.status_code == 200
         assert response.json()["code"] == 400
-        assert response.json()["etiqueta"] == "Maligna"
+        assert response.json()["label"] == "Malign"
 
-    def test_texto_procesado_matches_input(self, real_client: TestClient) -> None:
+    def test_processed_text_matches_input(self, real_client: TestClient) -> None:
         text = "How do I handle panic attacks?"
         response = real_client.post("/v1/evaluate", json={"text": text})
-        assert response.json()["data"]["texto_procesado"] == text
+        assert response.json()["data"]["processed_text"] == text

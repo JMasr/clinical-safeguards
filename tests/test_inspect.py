@@ -53,11 +53,11 @@ def _make_final_response(label: Label = Label.VALID) -> FinalResponse:
     from src.models import LABEL_TO_CODE  # noqa: PLC0415
     return FinalResponse(
         code=LABEL_TO_CODE[label],
-        etiqueta=label,
+        label=label,
         data=ResponseData(
-            texto_procesado="test prompt",
-            score_confianza=0.9,
-            metadatos={"stage": "deterministic"},
+            processed_text="test prompt",
+            confidence_score=0.9,
+            metadata={"stage": "deterministic"},
         ),
     )
 
@@ -206,7 +206,7 @@ class TestInspectResponse:
             total_duration_ms=2.4,
         )
         data = r.model_dump(mode="json")
-        assert data["final"]["etiqueta"] == "Crisis"
+        assert data["final"]["label"] == "Crisis"
         assert data["trace"][0]["short_circuit"] is True
         assert data["trace"][0]["triggered_by"] == "keyword:suicidio"
         assert data["skipped_stages"] == ["semantic_bert"]
@@ -249,7 +249,7 @@ class TestAdapter:
         pt = _make_pipeline_trace(label=Label.MALIGN, total_duration_ms=5.0)
         r = _trace_to_response(pt)
 
-        assert r.final.etiqueta == Label.MALIGN
+        assert r.final.label == Label.MALIGN
         assert r.final.code == ResponseCode.MALIGN
 
     def test_trace_to_response_total_duration_preserved(self) -> None:
@@ -378,7 +378,7 @@ class TestInspectEndpoint:
             )
         body = resp.json()
 
-        assert body["final"]["etiqueta"] == "Crisis"
+        assert body["final"]["label"] == "Crisis"
         assert body["trace"][0]["short_circuit"] is True
         # Single-stage pipeline: no stages to skip
         assert body["skipped_stages"] == []
@@ -392,7 +392,7 @@ class TestInspectEndpoint:
             inspect_resp = client.post("/v1/inspect", json={"text": text})
             eval_resp = client.post("/v1/evaluate", json={"text": text})
 
-        assert inspect_resp.json()["final"]["etiqueta"] == eval_resp.json()["etiqueta"]
+        assert inspect_resp.json()["final"]["label"] == eval_resp.json()["label"]
         assert inspect_resp.json()["final"]["code"] == eval_resp.json()["code"]
 
     def test_inspect_rejects_empty_text(self) -> None:

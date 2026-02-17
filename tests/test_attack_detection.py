@@ -4,12 +4,12 @@ from __future__ import annotations
 Unit tests for AttackDetectionStage.
 
 Covers:
-  - Label map: SAFE → Válida, INJECTION → Maligna (not Crisis)
+  - Label map: SAFE → Valid, INJECTION → Malign (not Crisis)
   - Inheritance: lazy loading, timeout, fail-closed all come from SemanticBERTStage
   - Default model_id and threshold
   - stage name override
   - threshold gating on INJECTION label
-  - Unknown labels (treated as Válida — conservative for unknown)
+  - Unknown labels (treated as Valid — conservative for unknown)
 
 No GPU, no model downloads. All tests use mock pipeline_factory.
 """

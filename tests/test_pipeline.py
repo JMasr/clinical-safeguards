@@ -52,11 +52,11 @@ class TestPipelineConstruction:
         stage = _make_stage("s1", make_stage_result(Label.VALID, short_circuit=False))
         pipeline = SafeguardPipeline(stages=[stage])
         response = pipeline.evaluate(valid_prompt)
-        assert response.etiqueta == Label.VALID
+        assert response.label == Label.VALID
 
 
 # ---------------------------------------------------------------------------
-# Happy path — Válida
+# Happy path — Valid
 # ---------------------------------------------------------------------------
 
 class TestPipelineValidPath:
@@ -68,9 +68,9 @@ class TestPipelineValidPath:
 
         assert isinstance(response, FinalResponse)
         assert response.code == ResponseCode.VALID
-        assert response.etiqueta == Label.VALID
-        assert response.data.texto_procesado == valid_prompt.text
-        assert response.data.score_confianza == 0.99
+        assert response.label == Label.VALID
+        assert response.data.processed_text == valid_prompt.text
+        assert response.data.confidence_score == 0.99
 
     def test_two_stages_both_valid(self, valid_prompt: PromptInput) -> None:
         s1 = _make_stage("det", make_stage_result(Label.VALID, confidence=0.8, short_circuit=False))
@@ -79,7 +79,7 @@ class TestPipelineValidPath:
 
         response = pipeline.evaluate(valid_prompt)
 
-        assert response.etiqueta == Label.VALID
+        assert response.label == Label.VALID
         # Both stages ran
         s1.process.assert_called_once()
         s2.process.assert_called_once()
@@ -103,7 +103,7 @@ class TestShortCircuit:
 
         response = pipeline.evaluate(crisis_prompt)
 
-        assert response.etiqueta == Label.CRISIS
+        assert response.label == Label.CRISIS
         assert response.code == ResponseCode.CRISIS
         s1.process.assert_called_once()
         s2.process.assert_not_called()  # ← critical assertion
@@ -118,7 +118,7 @@ class TestShortCircuit:
 
         response = pipeline.evaluate(malign_prompt)
 
-        assert response.etiqueta == Label.MALIGN
+        assert response.label == Label.MALIGN
         assert response.code == ResponseCode.MALIGN
         s2.process.assert_not_called()
 
@@ -145,7 +145,7 @@ class TestLabelPrecedence:
 
         response = pipeline.evaluate(valid_prompt)
 
-        assert response.etiqueta == Label.CRISIS
+        assert response.label == Label.CRISIS
 
     def test_malign_beats_valid(self, valid_prompt: PromptInput) -> None:
         s1 = _make_stage("det", make_stage_result(Label.VALID, short_circuit=False))
@@ -154,7 +154,7 @@ class TestLabelPrecedence:
 
         response = pipeline.evaluate(valid_prompt)
 
-        assert response.etiqueta == Label.MALIGN
+        assert response.label == Label.MALIGN
 
     def test_error_beats_valid_but_loses_to_malign(self, valid_prompt: PromptInput) -> None:
         s1 = _make_stage("det", make_stage_result(Label.ERROR, short_circuit=False))
@@ -163,7 +163,7 @@ class TestLabelPrecedence:
 
         response = pipeline.evaluate(valid_prompt)
 
-        assert response.etiqueta == Label.MALIGN
+        assert response.label == Label.MALIGN
 
 
 # ---------------------------------------------------------------------------
@@ -180,10 +180,10 @@ class TestFailClosed:
 
         response = pipeline.evaluate(valid_prompt)
 
-        assert response.etiqueta == Label.ERROR
+        assert response.label == Label.ERROR
         assert response.code == ResponseCode.ERROR
-        assert response.data.texto_procesado == ""  # never leaks prompt
-        assert "Error de integridad" in response.data.metadatos["reason"]
+        assert response.data.processed_text == ""  # never leaks prompt
+        assert "System integrity error" in response.data.metadata["reason"]
 
     def test_unexpected_exception_returns_server_error(
             self, valid_prompt: PromptInput
@@ -193,8 +193,8 @@ class TestFailClosed:
 
         response = pipeline.evaluate(valid_prompt)
 
-        assert response.etiqueta == Label.ERROR
-        assert response.data.texto_procesado == ""
+        assert response.label == Label.ERROR
+        assert response.data.processed_text == ""
 
     def test_fail_closed_does_not_raise(self, valid_prompt: PromptInput) -> None:
         """evaluate() must never propagate exceptions to the caller."""
@@ -214,8 +214,8 @@ class TestFailClosed:
 
         response = pipeline.evaluate(valid_prompt)
 
-        assert response.etiqueta == Label.ERROR
-        assert response.data.texto_procesado == ""
+        assert response.label == Label.ERROR
+        assert response.data.processed_text == ""
 
 
 # ---------------------------------------------------------------------------
@@ -223,16 +223,16 @@ class TestFailClosed:
 # ---------------------------------------------------------------------------
 
 class TestResponseStructure:
-    def test_metadatos_contains_stage_name(self, valid_prompt: PromptInput) -> None:
+    def test_metadata_contains_stage_name(self, valid_prompt: PromptInput) -> None:
         result = make_stage_result(Label.VALID, stage_name="deterministic", short_circuit=False)
         stage = _make_stage("deterministic", result)
         pipeline = SafeguardPipeline(stages=[stage])
 
         response = pipeline.evaluate(valid_prompt)
 
-        assert response.data.metadatos["stage"] == "deterministic"
+        assert response.data.metadata["stage"] == "deterministic"
 
-    def test_metadatos_contains_triggered_by_when_present(
+    def test_metadata_contains_triggered_by_when_present(
             self, crisis_prompt: PromptInput
     ) -> None:
         result = make_stage_result(
@@ -246,15 +246,15 @@ class TestResponseStructure:
 
         response = pipeline.evaluate(crisis_prompt)
 
-        assert response.data.metadatos["triggered_by"] == "keyword:suicidio"
+        assert response.data.metadata["triggered_by"] == "keyword:suicidio"
 
-    def test_texto_procesado_equals_input_text(self, valid_prompt: PromptInput) -> None:
+    def test_processed_text_equals_input_text(self, valid_prompt: PromptInput) -> None:
         stage = _make_stage("det", make_stage_result(Label.VALID, short_circuit=False))
         pipeline = SafeguardPipeline(stages=[stage])
 
         response = pipeline.evaluate(valid_prompt)
 
-        assert response.data.texto_procesado == valid_prompt.text
+        assert response.data.processed_text == valid_prompt.text
 
     def test_input_immutability(self, valid_prompt: PromptInput) -> None:
         """PromptInput must be frozen — stages cannot mutate it."""
@@ -313,7 +313,7 @@ class TestEvaluateWithTrace:
         trace = pipeline.evaluate_with_trace(valid_prompt)
         direct = pipeline.evaluate(valid_prompt)
 
-        assert trace.final_response.etiqueta == direct.etiqueta
+        assert trace.final_response.label == direct.label
         assert trace.final_response.code == direct.code
 
     def test_trace_contains_one_entry_per_executed_stage(
@@ -396,8 +396,8 @@ class TestEvaluateWithTrace:
         result = pipeline.evaluate_with_trace(valid_prompt)
 
         assert isinstance(result, PipelineTrace)
-        assert result.final_response.etiqueta == Label.ERROR
-        assert result.final_response.data.texto_procesado == ""
+        assert result.final_response.label == Label.ERROR
+        assert result.final_response.data.processed_text == ""
 
     def test_fail_closed_trace_is_empty_on_error(self, valid_prompt: PromptInput) -> None:
         """On pipeline failure the trace tuple is empty — no partial data leaked."""
