@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, DictConfig
 from pydantic import ValidationError
 
 from src.api.app import create_app
@@ -23,10 +23,9 @@ from src.models import (
     InspectResponse,
     Label,
     ResponseCode,
-    ResponseData,
     StageTraceResponse,
 )
-
+from src.models.response import ResponseData
 from tests.conftest import make_stage_result
 
 DET_TARGET = "src.stages.deterministic.DeterministicStage"
@@ -41,8 +40,13 @@ def _det_cfg() -> dict:
     }
 
 
-def _pipeline_cfg() -> OmegaConf:
-    return OmegaConf.create({"stages": [_det_cfg()]})
+def _stages_cfg(*stage_dicts: dict) -> DictConfig:
+    return OmegaConf.create({"stages": list(stage_dicts)})
+
+
+def _pipeline_cfg(*stage_dicts: dict) -> DictConfig:
+    pipeline = OmegaConf.create({"pipeline": _stages_cfg(*stage_dicts)})
+    return pipeline
 
 
 def _make_final_response(label: Label = Label.VALID) -> FinalResponse:
@@ -76,11 +80,16 @@ def _make_stage_trace(
 
 def _make_pipeline_trace(
         stage_traces: tuple[StageTrace, ...] = (),
+        all_stage_names: tuple[str, ...] | None = None,
         total_duration_ms: float = 10.0,
         label: Label = Label.VALID,
 ) -> PipelineTrace:
+    if all_stage_names is None:
+        # Default: all_stage_names = names of executed stages
+        all_stage_names = tuple(st.result.stage_name for st in stage_traces)
     return PipelineTrace(
         stage_traces=stage_traces,
+        all_stage_names=all_stage_names,
         total_duration_ms=total_duration_ms,
         final_response=_make_final_response(label),
     )
@@ -150,16 +159,22 @@ class TestInspectResponse:
         r = InspectResponse(
             final=_make_final_response(),
             trace=[],
+            skipped_stages=[],
+            total_stages=1,
             total_duration_ms=10.0,
         )
         assert r.total_duration_ms == pytest.approx(10.0)
         assert r.trace == []
+        assert r.skipped_stages == []
+        assert r.total_stages == 1
 
     def test_total_duration_must_be_non_negative(self) -> None:
         with pytest.raises(ValidationError):
             InspectResponse(
                 final=_make_final_response(),
                 trace=[],
+                skipped_stages=[],
+                total_stages=1,
                 total_duration_ms=-5.0,
             )
 
@@ -169,7 +184,13 @@ class TestInspectResponse:
                                score=0.5, short_circuit=False, duration_ms=1.0)
             for i in range(3)
         ]
-        r = InspectResponse(final=_make_final_response(), trace=stages, total_duration_ms=5.0)
+        r = InspectResponse(
+            final=_make_final_response(),
+            trace=stages,
+            skipped_stages=[],
+            total_stages=3,
+            total_duration_ms=5.0,
+        )
         assert [s.stage for s in r.trace] == ["s0", "s1", "s2"]
 
     def test_json_serialization_roundtrip(self) -> None:
@@ -180,12 +201,16 @@ class TestInspectResponse:
                 score=1.0, short_circuit=True, duration_ms=2.1,
                 triggered_by="keyword:suicidio",
             )],
+            skipped_stages=["semantic_bert"],
+            total_stages=2,
             total_duration_ms=2.4,
         )
         data = r.model_dump(mode="json")
         assert data["final"]["etiqueta"] == "Crisis"
         assert data["trace"][0]["short_circuit"] is True
         assert data["trace"][0]["triggered_by"] == "keyword:suicidio"
+        assert data["skipped_stages"] == ["semantic_bert"]
+        assert data["total_stages"] == 2
         assert data["total_duration_ms"] == pytest.approx(2.4)
 
 
@@ -233,6 +258,49 @@ class TestAdapter:
 
         assert r.total_duration_ms == pytest.approx(42.123)
 
+    def test_skipped_stages_when_short_circuit(self) -> None:
+        executed = (_make_stage_trace(label=Label.CRISIS, short_circuit=True),)
+        pt = _make_pipeline_trace(
+            stage_traces=executed,
+            all_stage_names=("deterministic", "semantic_bert", "attack_detection"),
+        )
+        r = _trace_to_response(pt)
+
+        assert r.skipped_stages == ["semantic_bert", "attack_detection"]
+        assert r.total_stages == 3
+
+    def test_no_skipped_stages_when_all_ran(self) -> None:
+        executed = (
+            _make_stage_trace(label=Label.VALID, short_circuit=False),
+            _make_stage_trace(label=Label.VALID, short_circuit=False),
+        )
+        # Assign distinct stage names
+        from src.core import StageTrace  # noqa: PLC0415
+        sr1 = make_stage_result(Label.VALID, stage_name="s1", short_circuit=False)
+        sr2 = make_stage_result(Label.VALID, stage_name="s2", short_circuit=False)
+        t1 = StageTrace(result=sr1, duration_ms=1.0)
+        t2 = StageTrace(result=sr2, duration_ms=1.0)
+        pt = _make_pipeline_trace(
+            stage_traces=(t1, t2),
+            all_stage_names=("s1", "s2"),
+        )
+        r = _trace_to_response(pt)
+
+        assert r.skipped_stages == []
+        assert r.total_stages == 2
+
+    def test_skipped_stages_order_matches_registration(self) -> None:
+        """Skipped stages appear in registration order, not alphabetical."""
+        sr = make_stage_result(Label.MALIGN, stage_name="det", short_circuit=True)
+        executed = (StageTrace(result=sr, duration_ms=1.0),)
+        pt = _make_pipeline_trace(
+            stage_traces=executed,
+            all_stage_names=("det", "zzz_bert", "aaa_attack"),
+        )
+        r = _trace_to_response(pt)
+
+        assert r.skipped_stages == ["zzz_bert", "aaa_attack"]
+
 
 # ---------------------------------------------------------------------------
 # /v1/inspect endpoint — integration via TestClient
@@ -265,25 +333,29 @@ class TestInspectEndpoint:
         assert "/v1/inspect" not in routes
 
     def test_inspect_returns_200(self) -> None:
-        app = create_app(pipeline_cfg=_pipeline_cfg(), inspect_mode=True)
+        app = create_app(pipeline_cfg=_pipeline_cfg(_det_cfg()), inspect_mode=True)
         with TestClient(app) as client:
             resp = client.post("/v1/inspect", json={"text": "Hello world"})
         assert resp.status_code == 200
 
     def test_inspect_response_structure(self) -> None:
-        app = create_app(pipeline_cfg=_pipeline_cfg(), inspect_mode=True)
+        app = create_app(pipeline_cfg=_pipeline_cfg(_det_cfg()), inspect_mode=True)
         with TestClient(app) as client:
             resp = client.post("/v1/inspect", json={"text": "Hello world"})
         body = resp.json()
 
         assert "final" in body
         assert "trace" in body
+        assert "skipped_stages" in body
+        assert "total_stages" in body
         assert "total_duration_ms" in body
         assert isinstance(body["trace"], list)
+        assert isinstance(body["skipped_stages"], list)
+        assert body["total_stages"] >= 1
         assert body["total_duration_ms"] >= 0
 
     def test_inspect_trace_contains_stage_fields(self) -> None:
-        app = create_app(pipeline_cfg=_pipeline_cfg(), inspect_mode=True)
+        app = create_app(pipeline_cfg=_pipeline_cfg(_det_cfg()), inspect_mode=True)
         with TestClient(app) as client:
             resp = client.post("/v1/inspect", json={"text": "Hello world"})
         trace = resp.json()["trace"]
@@ -297,7 +369,7 @@ class TestInspectEndpoint:
         assert "duration_ms" in stage
 
     def test_inspect_crisis_shows_short_circuit(self) -> None:
-        app = create_app(pipeline_cfg=_pipeline_cfg(), inspect_mode=True)
+        app = create_app(pipeline_cfg=_pipeline_cfg(_det_cfg()), inspect_mode=True)
         with TestClient(app) as client:
             resp = client.post(
                 "/v1/inspect",
@@ -308,10 +380,13 @@ class TestInspectEndpoint:
 
         assert body["final"]["etiqueta"] == "Crisis"
         assert body["trace"][0]["short_circuit"] is True
+        # Single-stage pipeline: no stages to skip
+        assert body["skipped_stages"] == []
+        assert body["total_stages"] == 1
 
     def test_inspect_final_matches_evaluate(self) -> None:
         """The final field of /v1/inspect must match /v1/evaluate for the same input."""
-        app = create_app(pipeline_cfg=_pipeline_cfg(), inspect_mode=True)
+        app = create_app(pipeline_cfg=_pipeline_cfg(_det_cfg()), inspect_mode=True)
         with TestClient(app) as client:
             text = "How do I manage my anxiety?"
             inspect_resp = client.post("/v1/inspect", json={"text": text})
@@ -321,7 +396,7 @@ class TestInspectEndpoint:
         assert inspect_resp.json()["final"]["code"] == eval_resp.json()["code"]
 
     def test_inspect_rejects_empty_text(self) -> None:
-        app = create_app(pipeline_cfg=_pipeline_cfg(), inspect_mode=True)
+        app = create_app(pipeline_cfg=_pipeline_cfg(_det_cfg()), inspect_mode=True)
         with TestClient(app) as client:
             resp = client.post("/v1/inspect", json={"text": ""})
         assert resp.status_code == 422
@@ -336,7 +411,7 @@ class TestInspectEndpoint:
         from a broken pipeline object (that would hide real bugs). The real fail-closed
         path is tested in test_pipeline.py::TestEvaluateWithTrace::test_fail_closed_*.
         """
-        app = create_app(pipeline_cfg=_pipeline_cfg(), inspect_mode=True)
+        app = create_app(pipeline_cfg=_pipeline_cfg(_det_cfg()), inspect_mode=True)
 
         broken_pipeline = MagicMock()
         broken_pipeline.evaluate_with_trace.side_effect = RuntimeError("forced crash")
