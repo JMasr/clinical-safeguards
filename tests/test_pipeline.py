@@ -263,6 +263,34 @@ class TestResponseStructure:
 
 
 # ---------------------------------------------------------------------------
+# stage_names property
+# ---------------------------------------------------------------------------
+
+class TestStageNames:
+    def test_stage_names_returns_all_names_in_order(self, valid_prompt: PromptInput) -> None:
+        s1 = _make_stage("det", make_stage_result(Label.VALID, short_circuit=False))
+        s2 = _make_stage("bert", make_stage_result(Label.VALID, short_circuit=False))
+        pipeline = SafeguardPipeline(stages=[s1, s2])
+
+        assert pipeline.stage_names == ("det", "bert")
+
+    def test_stage_names_single_stage(self, valid_prompt: PromptInput) -> None:
+        stage = _make_stage("only", make_stage_result(Label.VALID, short_circuit=False))
+        pipeline = SafeguardPipeline(stages=[stage])
+
+        assert pipeline.stage_names == ("only",)
+
+    def test_stage_names_includes_stages_not_run(self, valid_prompt: PromptInput) -> None:
+        """stage_names reflects registered stages, not executed stages."""
+        s1 = _make_stage("det", make_stage_result(Label.CRISIS, short_circuit=True))
+        s2 = _make_stage("bert", make_stage_result(Label.VALID, short_circuit=False))
+        pipeline = SafeguardPipeline(stages=[s1, s2])
+
+        pipeline.evaluate(valid_prompt)  # bert never runs
+        assert pipeline.stage_names == ("det", "bert")  # still listed
+
+
+# ---------------------------------------------------------------------------
 # StageTrace / PipelineTrace — evaluate_with_trace()
 # ---------------------------------------------------------------------------
 
