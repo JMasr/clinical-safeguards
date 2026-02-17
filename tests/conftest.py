@@ -51,6 +51,9 @@ def load_env_file() -> None:
     Fails immediately with a descriptive error if the .env is missing,
     so CI never silently skips HF-dependent tests.
     """
+    if os.getenv("HF_TOKEN") and os.getenv("SAFEGUARD_ENABLE_BERT"):
+        return
+
     if not _ENV_FILE.exists():
         pytest.fail(
             f"\n\n[conftest] Required .env file not found at: {_ENV_FILE}\n"
