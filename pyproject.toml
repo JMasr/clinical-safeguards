@@ -1,5 +1,5 @@
 [project]
-name = "clinical-safegards"
+name = "clinical-safeguards"
 version = "0.3.0"
 description = "A FastAPI application for clinical safeguards, providing endpoints for text processing and analysis."
 authors = [

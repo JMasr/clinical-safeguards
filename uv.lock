@@ -61,7 +61,7 @@ wheels = [
 ]
 
 [[package]]
-name = "clinical-safegards"
+name = "clinical-safeguards"
 version = "0.3.0"
 source = { virtual = "." }
 dependencies = [
