@@ -260,3 +260,151 @@ class TestResponseStructure:
         """PromptInput must be frozen — stages cannot mutate it."""
         with pytest.raises(Exception):
             valid_prompt.text = "mutated"  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# StageTrace / PipelineTrace — evaluate_with_trace()
+# ---------------------------------------------------------------------------
+
+from src.core.pipeline import PipelineTrace  # noqa: E402
+
+
+class TestEvaluateWithTrace:
+    def test_returns_pipeline_trace(self, valid_prompt: PromptInput) -> None:
+        stage = _make_stage("det", make_stage_result(Label.VALID, short_circuit=False))
+        pipeline = SafeguardPipeline(stages=[stage])
+
+        result = pipeline.evaluate_with_trace(valid_prompt)
+
+        assert isinstance(result, PipelineTrace)
+
+    def test_final_response_matches_evaluate(self, valid_prompt: PromptInput) -> None:
+        stage = _make_stage("det", make_stage_result(Label.VALID, short_circuit=False))
+        pipeline = SafeguardPipeline(stages=[stage])
+
+        trace = pipeline.evaluate_with_trace(valid_prompt)
+        direct = pipeline.evaluate(valid_prompt)
+
+        assert trace.final_response.etiqueta == direct.etiqueta
+        assert trace.final_response.code == direct.code
+
+    def test_trace_contains_one_entry_per_executed_stage(
+            self, valid_prompt: PromptInput
+    ) -> None:
+        s1 = _make_stage("det", make_stage_result(Label.VALID, short_circuit=False))
+        s2 = _make_stage("bert", make_stage_result(Label.VALID, short_circuit=False))
+        pipeline = SafeguardPipeline(stages=[s1, s2])
+
+        result = pipeline.evaluate_with_trace(valid_prompt)
+
+        assert len(result.stage_traces) == 2
+
+    def test_short_circuit_limits_trace_entries(self, crisis_prompt: PromptInput) -> None:
+        """Skipped stages must be absent from the trace — not present with empty data."""
+        s1 = _make_stage("det", make_stage_result(Label.CRISIS, stage_name="det", short_circuit=True))
+        s2 = _make_stage("bert", make_stage_result(Label.VALID, stage_name="bert", short_circuit=False))
+        pipeline = SafeguardPipeline(stages=[s1, s2])
+
+        result = pipeline.evaluate_with_trace(crisis_prompt)
+
+        assert len(result.stage_traces) == 1
+        assert result.stage_traces[0].result.stage_name == "det"
+
+    def test_stage_trace_has_positive_duration(self, valid_prompt: PromptInput) -> None:
+        stage = _make_stage("det", make_stage_result(Label.VALID, short_circuit=False))
+        pipeline = SafeguardPipeline(stages=[stage])
+
+        result = pipeline.evaluate_with_trace(valid_prompt)
+
+        assert result.stage_traces[0].duration_ms >= 0.0
+
+    def test_total_duration_gte_sum_of_stages(self, valid_prompt: PromptInput) -> None:
+        s1 = _make_stage("det", make_stage_result(Label.VALID, short_circuit=False))
+        s2 = _make_stage("bert", make_stage_result(Label.VALID, short_circuit=False))
+        pipeline = SafeguardPipeline(stages=[s1, s2])
+
+        result = pipeline.evaluate_with_trace(valid_prompt)
+
+        stage_sum = sum(t.duration_ms for t in result.stage_traces)
+        assert result.total_duration_ms >= stage_sum
+
+    def test_trace_preserves_stage_order(self, valid_prompt: PromptInput) -> None:
+        s1 = _make_stage("first", make_stage_result(Label.VALID, stage_name="first", short_circuit=False))
+        s2 = _make_stage("second", make_stage_result(Label.VALID, stage_name="second", short_circuit=False))
+        s3 = _make_stage("third", make_stage_result(Label.VALID, stage_name="third", short_circuit=False))
+        pipeline = SafeguardPipeline(stages=[s1, s2, s3])
+
+        result = pipeline.evaluate_with_trace(valid_prompt)
+
+        names = [t.result.stage_name for t in result.stage_traces]
+        assert names == ["first", "second", "third"]
+
+    def test_trace_stage_fields_match_stage_result(self, valid_prompt: PromptInput) -> None:
+        sr = make_stage_result(
+            Label.VALID,
+            stage_name="deterministic",
+            confidence=0.88,
+            triggered_by="keyword:test",
+            short_circuit=False,
+        )
+        stage = _make_stage("deterministic", sr)
+        pipeline = SafeguardPipeline(stages=[stage])
+
+        result = pipeline.evaluate_with_trace(valid_prompt)
+        st = result.stage_traces[0]
+
+        assert st.result.label == Label.VALID
+        assert st.result.confidence == pytest.approx(0.88)
+        assert st.result.triggered_by == "keyword:test"
+        assert st.result.short_circuit is False
+
+    def test_fail_closed_on_stage_error_returns_pipeline_trace(
+            self, valid_prompt: PromptInput
+    ) -> None:
+        """evaluate_with_trace must never raise — same guarantee as evaluate()."""
+        s1 = _make_failing_stage("det", RuntimeError("OOM"))
+        pipeline = SafeguardPipeline(stages=[s1])
+
+        result = pipeline.evaluate_with_trace(valid_prompt)
+
+        assert isinstance(result, PipelineTrace)
+        assert result.final_response.etiqueta == Label.ERROR
+        assert result.final_response.data.texto_procesado == ""
+
+    def test_fail_closed_trace_is_empty_on_error(self, valid_prompt: PromptInput) -> None:
+        """On pipeline failure the trace tuple is empty — no partial data leaked."""
+        s1 = _make_failing_stage("det", RuntimeError("crash"))
+        pipeline = SafeguardPipeline(stages=[s1])
+
+        result = pipeline.evaluate_with_trace(valid_prompt)
+
+        assert result.stage_traces == ()
+
+    def test_fail_closed_total_duration_recorded_even_on_error(
+            self, valid_prompt: PromptInput
+    ) -> None:
+        s1 = _make_failing_stage("det", RuntimeError("crash"))
+        pipeline = SafeguardPipeline(stages=[s1])
+
+        result = pipeline.evaluate_with_trace(valid_prompt)
+
+        assert result.total_duration_ms >= 0.0
+
+    def test_stage_trace_is_frozen(self, valid_prompt: PromptInput) -> None:
+        stage = _make_stage("det", make_stage_result(Label.VALID, short_circuit=False))
+        pipeline = SafeguardPipeline(stages=[stage])
+
+        result = pipeline.evaluate_with_trace(valid_prompt)
+        st = result.stage_traces[0]
+
+        with pytest.raises(Exception):
+            st.duration_ms = 999.0  # type: ignore[misc]
+
+    def test_pipeline_trace_is_frozen(self, valid_prompt: PromptInput) -> None:
+        stage = _make_stage("det", make_stage_result(Label.VALID, short_circuit=False))
+        pipeline = SafeguardPipeline(stages=[stage])
+
+        result = pipeline.evaluate_with_trace(valid_prompt)
+
+        with pytest.raises(Exception):
+            result.total_duration_ms = 999.0  # type: ignore[misc]
