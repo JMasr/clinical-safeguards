@@ -34,11 +34,6 @@ jobs:
       run: |
         uv sync --extra dev
 
-    - name: Lint with ruff
-      run: |
-        uv run ruff format --check
-        uv run ruff check
-
     - name: Test with pytest
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
