@@ -49,6 +49,8 @@ def _make_client(label: Label, code: ResponseCode) -> TestClient:
 
     mock_pipeline = MagicMock(spec=SafeguardPipeline)
     mock_pipeline.evaluate.return_value = _fixed_response(label, code)
+    # stage_names is a property — MagicMock needs explicit return value
+    type(mock_pipeline).stage_names = property(lambda self: ("mock_stage",))
 
     # Bypass lifespan by injecting directly into app.state
     app.state.safeguard_pipeline = mock_pipeline
@@ -74,6 +76,27 @@ class TestHealthEndpoint:
         response = client.get("/health")
         assert response.status_code == 503
         assert response.json()["status"] == "unavailable"
+
+    def test_health_exposes_pipeline_stage_names(self) -> None:
+        client = _make_client(Label.VALID, ResponseCode.VALID)
+        response = client.get("/health")
+        body = response.json()
+        assert "pipeline" in body
+        assert "stages" in body["pipeline"]
+        assert isinstance(body["pipeline"]["stages"], list)
+        assert len(body["pipeline"]["stages"]) >= 1
+
+    def test_health_exposes_stage_count(self) -> None:
+        client = _make_client(Label.VALID, ResponseCode.VALID)
+        body = client.get("/health").json()
+        stages = body["pipeline"]["stages"]
+        assert body["pipeline"]["stage_count"] == len(stages)
+
+    def test_health_exposes_inspect_mode_flag(self) -> None:
+        client = _make_client(Label.VALID, ResponseCode.VALID)
+        body = client.get("/health").json()
+        assert "inspect_mode" in body["pipeline"]
+        assert isinstance(body["pipeline"]["inspect_mode"], bool)
 
 
 # ---------------------------------------------------------------------------
