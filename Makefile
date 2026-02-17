@@ -16,6 +16,11 @@ PYTHON_INTERPRETER = ./.venv/bin/python
 requirements:
 	uv sync
 
+## Install Python dependencies
+.PHONY: requirements-dev
+requirements-dev: requirements
+	uv pip install .[dev]
+
 
 ## Delete all compiled Python files
 .PHONY: clean

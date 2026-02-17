@@ -32,7 +32,7 @@ make create_environment
 source .venv/bin/activate
 
 # Install dependencies (including dev dependencies)
-make requirements
+make requirements-dev
 
 # Create .env file for tests
 cat > .env << EOF
