@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 # "INJECTION" maps to Label.MALIGN (not Crisis) because prompt injection
 # is a security/integrity threat, not a patient safety crisis.
 # This distinction matters for the downstream response code:
-#   Maligna → 400, Crisis → 406
+#   Malign → 400, Crisis → 406
 # ---------------------------------------------------------------------------
 _ATTACK_LABEL_MAP: dict[str, Label] = {
     "SAFE": Label.VALID,
@@ -60,9 +60,9 @@ class AttackDetectionStage(SemanticBERTStage):
       - Threshold-based confidence gating
 
     What this class overrides:
-      - _NAME: distinct stage name for logging and metadatos
+      - _NAME: distinct stage name for logging and metadata
       - default model_id: ProtectAI/deberta-v3-base-prompt-injection-v2
-      - default label_map: SAFE → Válida, INJECTION → Maligna
+      - default label_map: SAFE → Valid, INJECTION → Malign
 
     The DeterministicStage already covers known bypass patterns via regex.
     This stage adds semantic coverage for novel or paraphrased injections

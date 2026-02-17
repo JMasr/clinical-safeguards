@@ -20,7 +20,7 @@ router = APIRouter()
             "Runs the prompt through the deterministic and (optionally) semantic "
             "stages. Always returns HTTP 200 with a structured JSON body. "
             "The `code` field in the response body carries the business result: "
-            "100=Válida, 400=Maligna, 406=Crisis, 500=Server Error."
+            "100=Valid, 400=Malign, 406=Crisis, 500=Server Error."
     ),
 )
 async def evaluate(request: Request, body: PromptInput) -> JSONResponse:
@@ -41,10 +41,10 @@ async def evaluate(request: Request, body: PromptInput) -> JSONResponse:
     response: FinalResponse = pipeline.evaluate(body)
 
     logger.info(
-        "Evaluation complete — correlation_id=%s code=%s etiqueta=%s",
+        "Evaluation complete — correlation_id=%s code=%s label=%s",
         correlation_id,
         response.code,
-        response.etiqueta,
+        response.label,
     )
 
     return JSONResponse(

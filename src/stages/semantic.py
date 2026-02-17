@@ -204,7 +204,7 @@ class SemanticBERTStage(GuardrailStage):
         3. Applies the confidence threshold: if score < threshold and the
            mapped label is non-VALID, we downgrade to VALID (the model is
            not confident enough to flag this input).
-        4. Sets short_circuit=True for Crisis and Maligna — consistent with
+        4. Sets short_circuit=True for Crisis and Malign — consistent with
            the deterministic stage contract.
         """
         try:

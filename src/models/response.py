@@ -41,7 +41,7 @@ class StageResult(BaseModel):
     # Human-readable reason: keyword matched, pattern id, model score, etc.
     triggered_by: str | None = None
     # When True the pipeline stops immediately after this stage.
-    # Always True for Crisis and Maligna — no configurable override.
+    # Always True for Crisis and Malign — no configurable override.
     short_circuit: bool = False
 
 
@@ -50,14 +50,14 @@ class StageResult(BaseModel):
 # ---------------------------------------------------------------------------
 
 class ResponseData(BaseModel):
-    texto_procesado: str
-    score_confianza: float = Field(ge=0.0, le=1.0)
-    metadatos: dict
+    processed_text: str
+    confidence_score: float = Field(ge=0.0, le=1.0)
+    metadata: dict
 
 
 class FinalResponse(BaseModel):
     code: ResponseCode
-    etiqueta: Label
+    label: Label
     data: ResponseData
 
 

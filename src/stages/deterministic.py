@@ -33,10 +33,10 @@ class DeterministicStage(GuardrailStage):
     Phase 1: deterministic keyword and regex matching.
 
     Decision logic (in order of priority):
-      1. Bypass patterns (regex) → Maligna, short_circuit=True
+      1. Bypass patterns (regex) → Malign, short_circuit=True
       2. Crisis keywords          → Crisis,  short_circuit=True
-      3. Malign keywords          → Maligna, short_circuit=True
-      4. No match                 → Válida,  short_circuit=False
+      3. Malign keywords          → Malign, short_circuit=True
+      4. No match                 → Valid,  short_circuit=False
 
     Crisis takes precedence over Malign in keyword matching because a prompt
     that contains both signals should always route to the crisis protocol.

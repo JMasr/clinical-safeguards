@@ -63,9 +63,9 @@ class SafeguardPipeline:
     Execution rules:
     1. Stages run in the order they were registered.
     2. If a stage returns short_circuit=True (always the case for Crisis /
-       Maligna), the pipeline stops immediately — no subsequent stage runs.
+       Malign), the pipeline stops immediately — no subsequent stage runs.
     3. If all stages complete without short-circuiting, the result with the
-       highest label precedence wins (Crisis > Maligna > Server Error > Válida).
+       highest label precedence wins (Crisis > Malign > Server Error > Valid).
     4. FAIL-CLOSED: any unhandled exception inside evaluate() — including
        StageExecutionError — produces a Server Error response. The original
        prompt text is never included in error responses.
@@ -201,17 +201,17 @@ class SafeguardPipeline:
 
     @staticmethod
     def _build_response(prompt: PromptInput, result: StageResult) -> FinalResponse:
-        metadatos: dict = {"stage": result.stage_name}
+        metadata: dict = {"stage": result.stage_name}
         if result.triggered_by:
-            metadatos["triggered_by"] = result.triggered_by
+            metadata["triggered_by"] = result.triggered_by
 
         return FinalResponse(
             code=LABEL_TO_CODE[result.label],
-            etiqueta=result.label,
+            label=result.label,
             data=ResponseData(
-                texto_procesado=prompt.text,
-                score_confianza=result.confidence,
-                metadatos=metadatos,
+                processed_text=prompt.text,
+                confidence_score=result.confidence,
+                metadata=metadata,
             ),
         )
 
@@ -223,10 +223,10 @@ class SafeguardPipeline:
         """
         return FinalResponse(
             code=LABEL_TO_CODE[Label.ERROR],
-            etiqueta=Label.ERROR,
+            label=Label.ERROR,
             data=ResponseData(
-                texto_procesado="",
-                score_confianza=0.0,
-                metadatos={"reason": "Error de integridad del sistema"},
+                processed_text="",
+                confidence_score=0.0,
+                metadata={"reason": "System integrity error"},
             ),
         )

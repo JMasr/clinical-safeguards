@@ -2,8 +2,8 @@ from enum import Enum
 
 
 class Label(str, Enum):
-    VALID = "Válida"
-    MALIGN = "Maligna"
+    VALID = "Valid"
+    MALIGN = "Malign"
     CRISIS = "Crisis"
     ERROR = "Server Error"
 
