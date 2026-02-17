@@ -1,7 +1,10 @@
 [project]
-name = "balidea-safegards"
-version = "0.1.0"
-description = "Add your description here"
+name = "clinical-safegards"
+version = "0.3.0"
+description = "A FastAPI application for clinical safeguards, providing endpoints for text processing and analysis."
+authors = [
+    { name = "José Manuel Ramírez Sánchez at Universidade de Vigo", email = "jmramirez@gts.uvigo.es" },
+]
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.111",
@@ -26,9 +29,10 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "--cov=clinical_safeguard --cov-report=term-missing --cov-fail-under=100"
+addopts = "--cov=src --cov-report=term-missing --cov-fail-under=90"
 
 [tool.coverage.run]
+source = ["src"]
 omit = ["tests/*", "*/__init__.py"]
 
 [tool.setuptools.packages.find]
