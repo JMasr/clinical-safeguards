@@ -19,7 +19,7 @@ requirements:
 ## Install Python dependencies
 .PHONY: requirements-dev
 requirements-dev: requirements
-	uv pip install .[dev]
+	uv sync --extra dev
 
 
 ## Delete all compiled Python files
