@@ -1,0 +1,111 @@
+# =============================================================================
+# bypass_patterns.yaml
+# Regex patterns for detecting prompt injection and jailbreak attempts.
+#
+# REFERENCES:
+#   [OWASP-LLM01] OWASP Top 10 for LLM Applications v1.1 (2023).
+#                 LLM01: Prompt Injection — the #1 ranked LLM security risk.
+#                 https://owasp.org/www-project-top-10-for-large-language-model-applications/
+#
+#   [Perez2022]   Perez, F., Ribeiro, I. (2022). "Ignore Previous Prompt:
+#                 Attack Techniques For Language Models." arXiv:2211.09527.
+#                 Introduces and categorizes direct instruction override attacks.
+#
+#   [Greshake2023] Greshake, K. et al. (2023). "Not what you've signed up for:
+#                  Compromising Real-World LLM-Integrated Applications with
+#                  Indirect Prompt Injection." arXiv:2302.12173.
+#
+#   [Shen2023]    Shen, X. et al. (2023). '"Do Anything Now": Characterizing
+#                 and Evaluating In-The-Wild Jailbreak Prompts on Large Language
+#                 Models.' arXiv:2308.03825. — Taxonomy of DAN and role-play
+#                 jailbreaks observed in the wild.
+#
+#   [CONCISE2024] Concise AI Security. (2024). "LLM Prompt Injection Explained:
+#                 Attacks, Risks & Examples." OWASP LLM01 reference analysis.
+#
+# PATTERN FORMAT:
+#   - pattern: Python regex string (applied case-insensitively, re.IGNORECASE)
+#   - id:      stable identifier for logging / audit trail
+#   - description: human-readable explanation for security review
+#
+# MAINTENANCE NOTES:
+#   - Patterns are compiled once at stage initialization (not per request).
+#   - Prefer specific patterns over broad ones to minimize false positives.
+#   - Test every new pattern against a suite of benign prompts before adding.
+#   - Encoding/obfuscation attacks (base64, leetspeak) are intentionally handled
+#     by the SemanticBERTStage — regex cannot reliably catch all variants.
+# =============================================================================
+
+patterns:
+
+  # ---------------------------------------------------------------------------
+  # Direct instruction override — the canonical prompt injection attack
+  # [Perez2022]: "Ignore Previous Prompt" is the foundational attack vector.
+  # ---------------------------------------------------------------------------
+  - id: BYPASS_001
+    description: "Direct instruction override — ignore/disregard/forget directives"
+    pattern: "ignore\\s+(all\\s+)?(previous|prior|above|earlier|initial|original)\\s+(instructions?|prompts?|rules?|guidelines?|constraints?|context|system)"
+
+  - id: BYPASS_002
+    description: "Forget/disregard system instructions"
+    pattern: "(forget|disregard|override|overwrite|reset|clear|delete|remove)\\s+(all\\s+)?(your\\s+)?(previous|prior|initial|system|original)?\\s*(instructions?|rules?|guidelines?|constraints?|training|programming|prompt)"
+
+  - id: BYPASS_003
+    description: "New instructions / new system prompt injection"
+    pattern: "(new|updated?|revised?|replacement)\\s+instructions?\\s*[:=\\-]"
+
+  # ---------------------------------------------------------------------------
+  # Role-play jailbreaks — DAN, persona, character bypass
+  # [Shen2023]: DAN ("Do Anything Now") and derivatives most common in-the-wild.
+  # ---------------------------------------------------------------------------
+  - id: BYPASS_010
+    description: "DAN (Do Anything Now) and direct derivatives"
+    pattern: "\\bDAN\\b|do\\s+anything\\s+now|jailbroken\\s+AI|jailbreak\\s+mode"
+
+  - id: BYPASS_011
+    description: "Persona/character override to bypass restrictions"
+    pattern: "(pretend|act|behave|respond)\\s+(you\\s+are|as\\s+if|like)\\s+(a\\s+)?(unrestricted|unfiltered|uncensored|free|evil|malicious|without\\s+(rules?|restrictions?|guidelines?|limits?))"
+
+  - id: BYPASS_012
+    description: "Roleplay as an AI without restrictions"
+    pattern: "(roleplay|role-play|role\\s+play)\\s+(as\\s+)?(an?\\s+)?(AI|assistant|bot|chatbot)\\s+(with(out)?\\s+)?(no\\s+)?(restrictions?|filters?|limits?|safety|guidelines?)"
+
+  - id: BYPASS_013
+    description: "Simulation / hypothetical framing to bypass safety"
+    pattern: "(simulate|simulation|hypothetical(ly)?|pretend\\s+that|imagine\\s+that)\\s+.{0,60}(no\\s+)?(restrictions?|rules?|guidelines?|safety|filters?|limits?)"
+
+  # ---------------------------------------------------------------------------
+  # System prompt extraction / leakage attempts
+  # [Greshake2023]: indirect injection via system prompt extraction
+  # ---------------------------------------------------------------------------
+  - id: BYPASS_020
+    description: "Attempt to extract or reveal system prompt"
+    pattern: "(repeat|print|output|show|display|reveal|tell\\s+me|what\\s+is)\\s+(your\\s+)?(system\\s+prompt|initial\\s+prompt|original\\s+instructions?|hidden\\s+instructions?|base\\s+prompt|meta\\s+prompt)"
+
+  - id: BYPASS_021
+    description: "Prompt leakage via translation or format tricks"
+    pattern: "(translate|convert|encode|decode|rewrite|summarize)\\s+(your\\s+)?(system\\s+prompt|original\\s+instructions?|initial\\s+prompt)"
+
+  # ---------------------------------------------------------------------------
+  # Authority/developer impersonation
+  # Classic social engineering variant applied to LLM systems [OWASP-LLM01]
+  # ---------------------------------------------------------------------------
+  - id: BYPASS_030
+    description: "Impersonation of developer, admin, or maintenance mode"
+    pattern: "(maintenance|developer|admin|debug|god|sudo|root|superuser)\\s*(mode|access|override|prompt|command|instructions?)"
+
+  - id: BYPASS_031
+    description: "Claiming special permissions or authorization"
+    pattern: "(i\\s+(am|have)\\s+(the\\s+)?(developer|administrator|admin|creator|owner|authorized)|i\\s+have\\s+(special\\s+)?(access|permission|clearance|authorization))"
+
+  # ---------------------------------------------------------------------------
+  # Token/format manipulation — padding, separator, and context confusion
+  # [Wallace2019]: adversarial trigger tokens and context manipulation
+  # ---------------------------------------------------------------------------
+  - id: BYPASS_040
+    description: "Use of separator tokens to inject new instructions"
+    pattern: "(###\\s*new\\s*(instruction|prompt|system)|<<<\\s*system|\\[system\\]|<\\|system\\|>|<system>)"
+
+  - id: BYPASS_041
+    description: "End-of-prompt injection via padding or fake completion"
+    pattern: "(end\\s+of\\s+(conversation|prompt|session|context)|\\[end\\]|<\\|endoftext\\|>)\\s*.{0,30}(now|instead|actually|but)"

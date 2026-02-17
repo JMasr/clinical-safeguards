@@ -1,0 +1,210 @@
+# =============================================================================
+# keywords_crisis.yaml
+# Crisis indicator keywords for the DeterministicStage.
+#
+# REFERENCES:
+#   [C-SSRS] Posner, K., Brown, G.K., Stanley, B., et al. (2011).
+#            "The Columbia-Suicide Severity Rating Scale: initial validity and
+#            internal consistency findings from three multisite studies with
+#            adolescents and adults." Am J Psychiatry, 168(12):1266-1277.
+#            https://cssrs.columbia.edu
+#
+#   [CSRS-CAT] Columbia C-SSRS 10-category structure:
+#              Cat.1 Wish to be Dead, Cat.2 Non-specific Active Suicidal Thoughts,
+#              Cat.3-5 Active Ideation with escalating intent/plan,
+#              Cat.6 Preparatory Acts, Cat.7-8 Aborted/Interrupted Attempts,
+#              Cat.9-10 Actual Attempt / Completed Suicide.
+#
+#   [Coppersmith2018] Coppersmith, G., Leary, R., Crutchley, P., Fine, A. (2018).
+#                     "Natural Language Processing of Social Media as Screening
+#                     for Suicide Risk." Crisis, 39(5):389-398. PMC6111391.
+#
+#   [Grimland2025]    Grimland, M. et al. (2025). "Explainable AI for suicide
+#                     risk detection: gender and age-sensitive frameworks."
+#                     Front. Psychiatry. DOI: 10.3389/fpsyt.2025.
+#
+#   [SAMHSA2023]      SAMHSA. (2023). "Suicide Safe: A mobile app to support
+#                     clinicians." https://www.samhsa.gov
+#
+# MAINTENANCE NOTES:
+#   - Keywords are case-insensitive at match time (lowercased in the stage).
+#   - Add variants with common misspellings or SMS contractions as needed.
+#   - Each category maps to a C-SSRS level for severity triage metadata.
+#   - DO NOT remove entries without clinical review.
+#   - All entries validated against the C-SSRS probe questions and SAMHSA
+#     Safe Messaging Guidelines (https://sprc.org/resources/safe-messaging).
+# =============================================================================
+
+categories:
+
+  # ---------------------------------------------------------------------------
+  # C-SSRS Category 1 — Wish to Be Dead (passive ideation, lowest severity)
+  # Probe: "Have you wished you were dead or wished you could go to sleep
+  # and never wake up?" [C-SSRS]
+  # ---------------------------------------------------------------------------
+  wish_to_be_dead:
+    cssrs_level: 1
+    keywords:
+      - wish i was dead
+      - wish i were dead
+      - want to be dead
+      - wish i could die
+      - want to go to sleep and never wake up
+      - wish i could fall asleep and not wake up
+      - don't want to wake up
+      - better off dead
+      - everyone would be better off without me
+      - world would be better without me
+      - no reason to live
+      - don't want to be alive
+      - don't want to exist
+      - wish i didn't exist
+      - tired of living
+      - tired of being alive
+
+  # ---------------------------------------------------------------------------
+  # C-SSRS Category 2 — Non-specific Active Suicidal Thoughts
+  # Probe: "Have you thought about doing something to make yourself not alive
+  # anymore?" [C-SSRS]
+  # ---------------------------------------------------------------------------
+  nonspecific_active_ideation:
+    cssrs_level: 2
+    keywords:
+      - thinking about suicide
+      - thought about suicide
+      - suicidal thoughts
+      - suicidal ideation
+      - thinking about killing myself
+      - thought about killing myself
+      - want to kill myself
+      - want to end my life
+      - thinking about ending my life
+      - considering suicide
+      - contemplating suicide
+      - have been having thoughts
+      - thoughts of suicide
+      - thoughts of self harm
+      - thinking about self harm
+      - thinking about hurting myself
+
+  # ---------------------------------------------------------------------------
+  # C-SSRS Category 3 — Active Ideation with Method (no plan, no intent)
+  # Probe: "Have you thought about how you might do this?" [C-SSRS]
+  # [Grimland2025] identifies method-specific language as strong predictor
+  # ---------------------------------------------------------------------------
+  ideation_with_method:
+    cssrs_level: 3
+    keywords:
+      - thought about how to kill myself
+      - thinking about overdosing
+      - thought about overdosing
+      - thought about hanging myself
+      - thought about shooting myself
+      - thought about jumping
+      - thought about slitting my wrists
+      - thought about cutting my wrists
+      - thinking about ways to end my life
+      - researching ways to die
+      - looking up methods
+      - thinking about pills
+      - thought about drowning myself
+      - thought about crashing my car
+
+  # ---------------------------------------------------------------------------
+  # C-SSRS Category 4-5 — Active Ideation with Intent / Specific Plan
+  # Probe: "Have you had some intention of acting on these thoughts?" [C-SSRS]
+  # Highest deterministic priority — immediate risk. [Coppersmith2018]
+  # ---------------------------------------------------------------------------
+  active_intent_or_plan:
+    cssrs_level: 5
+    keywords:
+      - i am going to kill myself
+      - i will kill myself
+      - i'm going to end my life
+      - i will end my life
+      - i have a plan to kill myself
+      - i have decided to kill myself
+      - i have decided to end my life
+      - i'm going to do it tonight
+      - i'm going to do it today
+      - i've made up my mind
+      - tonight is the night
+      - planning to kill myself
+      - set a date to die
+      - i know how i'm going to do it
+      - i have everything i need
+      - i wrote a note
+      - i wrote my goodbye
+      - writing a suicide note
+      - goodbye letter
+      - last message
+
+  # ---------------------------------------------------------------------------
+  # C-SSRS Category 6 — Preparatory Acts or Behavior
+  # Probe: "Have you done anything to get ready to make yourself not alive
+  # anymore?" [C-SSRS]
+  # ---------------------------------------------------------------------------
+  preparatory_behavior:
+    cssrs_level: 6
+    keywords:
+      - giving things away
+      - gave away my belongings
+      - giving away my stuff
+      - stockpiling pills
+      - hoarding medication
+      - bought a gun
+      - got a gun
+      - acquired the means
+      - prepared to die
+      - getting my affairs in order
+      - updated my will
+      - wrote a will
+      - said goodbye to everyone
+      - already said my goodbyes
+
+  # ---------------------------------------------------------------------------
+  # Self-harm (non-suicidal) — included per SAMHSA Safe Messaging Guidelines
+  # and [Coppersmith2018] as high-correlation signal requiring crisis response
+  # ---------------------------------------------------------------------------
+  self_harm:
+    cssrs_level: 3
+    keywords:
+      - cutting myself
+      - i cut myself
+      - i have been cutting
+      - self harm
+      - self-harm
+      - selfharm
+      - hurting myself
+      - burning myself
+      - i burn myself
+      - hitting myself
+      - harming myself
+      - scratching until i bleed
+      - pulling my hair out
+      - starving myself
+      - making myself sick
+      - making myself throw up
+
+  # ---------------------------------------------------------------------------
+  # Crisis urgency markers — temporal imminence signals
+  # [Grimland2025]: temporal language strongly predictive of high-risk SR
+  # ---------------------------------------------------------------------------
+  temporal_urgency:
+    cssrs_level: 4
+    keywords:
+      - can't take it anymore
+      - can't go on
+      - cannot go on
+      - can't do this anymore
+      - i give up
+      - i've given up
+      - this is the end
+      - it ends tonight
+      - i won't be here tomorrow
+      - not going to make it
+      - don't have much time left
+      - won't last much longer
+      - last day
+      - last night
+      - one last time

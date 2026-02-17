@@ -1,0 +1,93 @@
+# =============================================================================
+# keywords_malign.yaml
+# Malign intent keywords for the DeterministicStage.
+# These indicate harmful requests directed AT OTHERS or requests for
+# dangerous information — distinct from crisis (self-harm) signals.
+#
+# REFERENCES:
+#   [OWASP-LLM01] OWASP Top 10 for LLM Applications v1.1 (2023).
+#                 LLM01: Prompt Injection.
+#                 https://owasp.org/www-project-top-10-for-large-language-model-applications/
+#
+#   [Perez2022]   Perez, F., Ribeiro, I. (2022). "Ignore Previous Prompt:
+#                 Attack Techniques For Language Models." NeurIPS ML Safety
+#                 Workshop. arXiv:2211.09527.
+#
+#   [Greshake2023] Greshake, K. et al. (2023). "Not what you've signed up for:
+#                  Compromising Real-World LLM-Integrated Applications with
+#                  Indirect Prompt Injection." arXiv:2302.12173.
+#
+#   [Wallace2019]  Wallace, E. et al. (2019). "Universal Adversarial Triggers
+#                  for Attacking and Analyzing NLP." EMNLP 2019.
+#                  arXiv:1908.07125.
+#
+# MAINTENANCE NOTES:
+#   - This file covers HIGH-CONFIDENCE malign signals only.
+#   - Ambiguous or low-confidence signals should be handled by SemanticBERTStage.
+#   - Entries here represent clear violations with minimal false-positive risk
+#     in a clinical AI assistant context.
+# =============================================================================
+
+categories:
+
+  # ---------------------------------------------------------------------------
+  # Threats and violence toward others
+  # High-confidence harmful intent signals in a clinical context
+  # ---------------------------------------------------------------------------
+  harm_to_others:
+    keywords:
+      - i want to kill
+      - i am going to kill
+      - i will kill
+      - going to hurt
+      - i want to hurt someone
+      - i want to hurt him
+      - i want to hurt her
+      - i want to hurt them
+      - planning to attack
+      - going to attack
+      - want to poison
+      - going to poison
+      - hurt my family
+      - hurt my partner
+      - hurt my child
+      - harm my child
+      - kill my family
+      - murder someone
+      - i want to murder
+
+  # ---------------------------------------------------------------------------
+  # Requests for dangerous clinical information
+  # Exploitation of the clinical AI context to extract harmful information
+  # ---------------------------------------------------------------------------
+  dangerous_clinical_misuse:
+    keywords:
+      - lethal dose of
+      - how much to overdose on
+      - how many pills to die
+      - fatal dose of
+      - how to overdose
+      - what medications kill
+      - combination to cause death
+      - drugs that stop the heart
+      - how to make someone unconscious
+      - how to sedate someone without
+      - give someone drugs without knowing
+      - slip something into
+      - drug someone
+      - maximum dose to cause death
+
+  # ---------------------------------------------------------------------------
+  # Illegal activity facilitation
+  # ---------------------------------------------------------------------------
+  illegal_facilitation:
+    keywords:
+      - how to get drugs illegally
+      - where to buy illegal
+      - how to forge a prescription
+      - fake prescription
+      - steal medication
+      - how to steal pills
+      - obtain controlled substances without
+      - buy opioids without prescription
+      - get fentanyl without
