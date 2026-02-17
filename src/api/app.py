@@ -35,7 +35,7 @@ def _configure_logging() -> None:
     )
 
 
-def _build_pipeline(full_cfg: DictConfig) -> SafeguardPipeline:
+def _build_pipeline(pipeline_cfg: DictConfig) -> SafeguardPipeline:
     """
     Instantiate a SafeguardPipeline from a Hydra DictConfig.
 
@@ -47,7 +47,7 @@ def _build_pipeline(full_cfg: DictConfig) -> SafeguardPipeline:
     Stage order in the pipeline matches the order in the YAML config.
     """
     from hydra.utils import instantiate  # noqa: PLC0415 — lazy import keeps startup fast
-    pipeline_cfg = full_cfg.pipeline
+
     stages_cfg = list(pipeline_cfg.stages)
 
     # --- Registry validation -------------------------------------------
@@ -82,11 +82,11 @@ def _build_pipeline(full_cfg: DictConfig) -> SafeguardPipeline:
     return SafeguardPipeline(stages=stages)
 
 
-def _needs_hf_auth(full_cfg: DictConfig) -> bool:
+def _needs_hf_auth(pipeline_cfg: DictConfig) -> bool:
     """Return True if any stage in the config requires a HuggingFace model."""
     return any(
         cfg.get("_target_") in _HF_DEPENDENT_STAGES
-        for cfg in full_cfg.pipeline.stages
+        for cfg in pipeline_cfg.stages
     )
 
 
@@ -104,7 +104,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     _configure_logging()
     settings: Settings = get_settings()
-    pipeline_cfg: DictConfig = app.state.pipeline_cfg
+    all_cfg: DictConfig = app.state.pipeline_cfg
+    pipeline_cfg: DictConfig = all_cfg.pipeline
 
     logger.info("Clinical Safeguard Middleware starting…")
     try:
@@ -133,16 +134,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app(
         pipeline_cfg: DictConfig | None = None,
         settings: Settings | None = None,
+        inspect_mode: bool | None = None,
 ) -> FastAPI:
     """
     App factory.
 
     Args:
-        pipeline_cfg: Hydra DictConfig for the pipeline. In production this
-                      comes from @hydra.main(); in tests it is built directly
-                      with OmegaConf.create({...}).
-        settings:     Optional Settings override. Used in tests to inject a
-                      Settings instance without reading .env.
+        pipeline_cfg:  Hydra DictConfig for the pipeline. In production this
+                       comes from @hydra.main(); in tests it is built directly
+                       with OmegaConf.create({...}).
+        settings:      Optional Settings override. Used in tests to inject a
+                       Settings instance without reading .env.
+        inspect_mode:  When True, registers /v1/inspect. When None (default),
+                       reads SAFEGUARD_INSPECT_MODE from the environment.
+                       Pass explicitly in tests to avoid monkeypatch dependency.
     """
     if settings is not None:
         get_settings.cache_clear()
@@ -176,5 +181,22 @@ def create_app(
 
     from src.api.router import router  # noqa: PLC0415
     app.include_router(router)
+
+    # /v1/inspect is only registered when inspect_mode is True.
+    # inspect_mode can be set explicitly (tests) or read from the environment
+    # (production). Reading it here — inside create_app — ensures monkeypatch
+    # works correctly: the env var is resolved at call time, not import time.
+    import os  # noqa: PLC0415
+    _inspect = (
+        inspect_mode
+        if inspect_mode is not None
+        else os.getenv("SAFEGUARD_INSPECT_MODE", "false").lower() == "true"
+    )
+    if _inspect:
+        from src.api.inspect_router import inspect_router  # noqa: PLC0415
+        app.include_router(inspect_router)
+        logger.info("Inspect mode enabled — /v1/inspect is available.")
+    else:
+        logger.info("Inspect mode disabled — /v1/inspect is not registered.")
 
     return app

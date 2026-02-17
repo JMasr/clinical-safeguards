@@ -59,3 +59,36 @@ class FinalResponse(BaseModel):
     code: ResponseCode
     etiqueta: Label
     data: ResponseData
+
+
+# ---------------------------------------------------------------------------
+# Inspect endpoint response — HTTP adapter over PipelineTrace
+#
+# These models are the public contract of /v1/inspect. They are deliberately
+# separate from StageTrace/PipelineTrace (internal dataclasses in core/pipeline.py)
+# so the pipeline can evolve its internal representation without breaking
+# external consumers. The translation happens in api/inspect_router.py.
+# ---------------------------------------------------------------------------
+
+class StageTraceResponse(BaseModel):
+    """Public representation of a single stage execution record."""
+
+    stage: str
+    label: Label
+    score: float = Field(ge=0.0, le=1.0)
+    triggered_by: str | None = None
+    short_circuit: bool
+    duration_ms: float = Field(ge=0.0)
+
+
+class InspectResponse(BaseModel):
+    """
+    Full pipeline execution trace returned by /v1/inspect.
+
+    `trace` contains only the stages that actually ran — stages skipped
+    due to short-circuit are absent, which is itself diagnostic information.
+    """
+
+    final: FinalResponse
+    trace: list[StageTraceResponse]
+    total_duration_ms: float = Field(ge=0.0)
