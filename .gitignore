@@ -5,6 +5,7 @@
 
 # File extentions for resources
 .coverage
+coverage.xml
 .txt
 .csv
 
