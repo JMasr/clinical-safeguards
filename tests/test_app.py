@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, DictConfig
 
 from src.api.app import (
     _build_pipeline,
@@ -58,9 +58,13 @@ def _attack_cfg() -> dict:
     }
 
 
-def _pipeline_cfg(*stage_dicts: dict) -> OmegaConf:
+def _stages_cfg(*stage_dicts: dict) -> DictConfig:
     return OmegaConf.create({"stages": list(stage_dicts)})
 
+
+def _pipeline_cfg(*stage_dicts: dict) -> DictConfig:
+    pipeline = OmegaConf.create({"pipeline": _stages_cfg(*stage_dicts)})
+    return pipeline
 
 # ---------------------------------------------------------------------------
 # _configure_logging
@@ -77,15 +81,15 @@ class TestConfigureLogging:
 
 class TestNeedsHfAuth:
     def test_deterministic_only_does_not_need_hf(self) -> None:
-        cfg = _pipeline_cfg(_det_cfg())
+        cfg = _stages_cfg(_det_cfg())
         assert _needs_hf_auth(cfg) is False
 
     def test_bert_stage_needs_hf(self) -> None:
-        cfg = _pipeline_cfg(_det_cfg(), _bert_cfg())
+        cfg = _stages_cfg(_det_cfg(), _bert_cfg())
         assert _needs_hf_auth(cfg) is True
 
     def test_attack_stage_needs_hf(self) -> None:
-        cfg = _pipeline_cfg(_det_cfg(), _attack_cfg())
+        cfg = _stages_cfg(_det_cfg(), _attack_cfg())
         assert _needs_hf_auth(cfg) is True
 
 
@@ -95,38 +99,38 @@ class TestNeedsHfAuth:
 
 class TestBuildPipeline:
     def test_deterministic_only_pipeline(self) -> None:
-        cfg = _pipeline_cfg(_det_cfg())
+        cfg = _stages_cfg(_det_cfg())
         pipeline = _build_pipeline(cfg)
         assert len(pipeline._stages) == 1
         assert pipeline._stages[0].name == "deterministic"
 
     def test_two_stage_pipeline_order_preserved(self) -> None:
-        cfg = _pipeline_cfg(_det_cfg(), _bert_cfg())
+        cfg = _stages_cfg(_det_cfg(), _bert_cfg())
         pipeline = _build_pipeline(cfg)
         assert len(pipeline._stages) == 2
         assert pipeline._stages[0].name == "deterministic"
         assert pipeline._stages[1].name == "semantic_bert"
 
     def test_three_stage_pipeline(self) -> None:
-        cfg = _pipeline_cfg(_det_cfg(), _bert_cfg(), _attack_cfg())
+        cfg = _stages_cfg(_det_cfg(), _bert_cfg(), _attack_cfg())
         pipeline = _build_pipeline(cfg)
         assert len(pipeline._stages) == 3
         assert pipeline._stages[2].name == "attack_detection"
 
     def test_attack_before_bert_order_respected(self) -> None:
         """Hydra config order is the execution order — no hardcoded ordering."""
-        cfg = _pipeline_cfg(_det_cfg(), _attack_cfg(), _bert_cfg())
+        cfg = _stages_cfg(_det_cfg(), _attack_cfg(), _bert_cfg())
         pipeline = _build_pipeline(cfg)
         assert pipeline._stages[1].name == "attack_detection"
         assert pipeline._stages[2].name == "semantic_bert"
 
     def test_unknown_target_raises_resource_load_error(self) -> None:
-        cfg = _pipeline_cfg(_det_cfg(), {"_target_": UNKNOWN_TARGET})
+        cfg = _stages_cfg(_det_cfg(), {"_target_": UNKNOWN_TARGET})
         with pytest.raises(ResourceLoadError, match="Unknown stage"):
             _build_pipeline(cfg)
 
     def test_resource_load_error_propagates_on_bad_paths(self) -> None:
-        cfg = _pipeline_cfg({
+        cfg = _stages_cfg({
             "_target_": DET_TARGET,
             "keywords_crisis_path": "/nonexistent/crisis.yaml",
             "keywords_malign_path": "/nonexistent/malign.yaml",
@@ -136,7 +140,7 @@ class TestBuildPipeline:
             _build_pipeline(cfg)
 
     def test_threshold_override_respected(self) -> None:
-        cfg = _pipeline_cfg(_det_cfg(), _bert_cfg(threshold=0.99))
+        cfg = _stages_cfg(_det_cfg(), _bert_cfg(threshold=0.99))
         pipeline = _build_pipeline(cfg)
         assert pipeline._stages[1]._threshold == pytest.approx(0.99)
 
@@ -174,16 +178,16 @@ class TestCreateApp:
 
 class TestLifespan:
     def test_startup_loads_pipeline_into_app_state(self) -> None:
-        cfg = _pipeline_cfg(_det_cfg())
-        app = create_app(pipeline_cfg=cfg)
+        pipeline_cfg = _pipeline_cfg(_det_cfg())
+        app = create_app(pipeline_cfg=pipeline_cfg)
         with TestClient(app) as client:
             assert hasattr(app.state, "safeguard_pipeline")
             assert client.get("/health").status_code == 200
 
     def test_startup_with_hf_stage_calls_hf_init(self) -> None:
-        cfg = _pipeline_cfg(_det_cfg(), _bert_cfg())
+        pipeline_cfg = _pipeline_cfg(_det_cfg(), _bert_cfg())
         settings = make_settings(HF_TOKEN="hf_testtoken")
-        app = create_app(pipeline_cfg=cfg, settings=settings)
+        app = create_app(pipeline_cfg=pipeline_cfg, settings=settings)
 
         with patch("src.api.app.get_settings", return_value=settings), \
                 patch("src.api.app.initialize_hf_services") as mock_init:
@@ -191,9 +195,9 @@ class TestLifespan:
                 mock_init.assert_called_once_with(settings.hf_token)
 
     def test_startup_deterministic_only_skips_hf_init(self) -> None:
-        cfg = _pipeline_cfg(_det_cfg())
+        pipeline_cfg = _pipeline_cfg(_det_cfg())
         settings = make_settings()
-        app = create_app(pipeline_cfg=cfg, settings=settings)
+        app = create_app(pipeline_cfg=pipeline_cfg, settings=settings)
 
         with patch("src.api.app.get_settings", return_value=settings), \
                 patch("src.api.app.initialize_hf_services") as mock_init:
