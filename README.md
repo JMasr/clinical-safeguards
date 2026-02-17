@@ -1,225 +1,454 @@
-## Estructura de Módulos
+# Clinical Safeguards
+
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111+-green.svg)](https://fastapi.tiangolo.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://img.shields.io/badge/Pytest-green?logo=pytest)]()
+[![Coverage](https://img.shields.io/badge/coverage->90%25-brightgreen.svg)]()
+
+A production-ready safeguard middleware for clinical LLM applications. Implements a multi-stage pipeline to detect
+crisis situations, malicious prompts, and prompt injection attacks before they reach your LLM.
+
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Architecture](#architecture)
+- [Pipeline Stages](#pipeline-stages)
+- [API Reference](#api-reference)
+- [Configuration](#configuration)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Features
+
+- **Multi-stage Pipeline**: Sequential execution with short-circuit on detection
+- **Crisis Detection**: C-SSRS-based keyword detection for mental health emergencies
+- **Malicious Content Filtering**: Detection of harmful requests and policy violations
+- **Prompt Injection Defense**: Semantic detection using fine-tuned DeBERTa model
+- **Fail-Closed Design**: Any unhandled error returns a safe Server Error response
+- **Zero Prompt Leakage**: Original prompt text never included in error responses
+- **Configurable Stages**: Hydra-based configuration for flexible pipeline composition
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.12+
+- [uv](https://github.com/astral-sh/uv) package manager
+- HuggingFace token (for semantic stages)
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/JMasr/clinical-safeguard.git
+cd clinical-safeguard
+
+# Create virtual environment and install dependencies
+make create_environment
+source .venv/bin/activate
+make requirements
+```
+
+### Configuration
+
+Create a `.env` file in the project root:
+
+```bash
+HF_TOKEN=hf_your_huggingface_token_here
+SAFEGUARD_TIMEOUT=10
+```
+
+### Running the Service
+
+```bash
+# Development (deterministic stage only, no models)
+python main.py pipeline=default
+
+# Production with clinical BERT
+python main.py pipeline=clinical
+
+# Full stack (BERT + attack detection)
+python main.py pipeline=full
+
+# Using uvicorn directly
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Quick Test
+
+```bash
+curl -X POST http://localhost:8000/v1/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{"text": "What are healthy coping strategies for anxiety?"}'
+```
+
+## Architecture
+
+### Pipeline Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as FastAPI
+    participant Pipeline as SafeguardPipeline
+    participant Det as DeterministicStage
+    participant Sem as SemanticBERTStage
+    participant Atk as AttackDetectionStage
+
+    Client->>API: POST /v1/evaluate
+    API->>Pipeline: evaluate(prompt)
+    
+    Pipeline->>Det: process(prompt)
+    Det-->>Pipeline: StageResult
+    
+    alt Crisis/Malign detected (short_circuit=true)
+        Pipeline-->>API: FinalResponse (blocked)
+    else Valid - continue
+        Pipeline->>Sem: process(prompt)
+        Sem-->>Pipeline: StageResult
+        
+        alt Crisis detected
+            Pipeline-->>API: FinalResponse (blocked)
+        else Valid - continue
+            Pipeline->>Atk: process(prompt)
+            Atk-->>Pipeline: StageResult
+            Pipeline-->>API: FinalResponse
+        end
+    end
+    
+    API-->>Client: HTTP 200 + JSON response
+```
+
+### Module Structure
 
 ```
-clinical_safeguard/
+src/
 ├── core/
-│   ├── __init__.py
-│   ├── pipeline.py          # SafeguardPipeline — orquestador
+│   ├── pipeline.py          # SafeguardPipeline — orchestrator
 │   ├── base.py              # GuardrailStage ABC
-│   └── exceptions.py        # Jerarquía de excepciones internas
+│   └── exceptions.py        # Exception hierarchy
 ├── stages/
-│   ├── __init__.py
-│   ├── deterministic.py     # DeterministicStage
-│   └── semantic.py          # SemanticBERTStage
+│   ├── deterministic.py     # Keyword + regex matching
+│   ├── semantic.py          # Clinical BERT classifier
+│   └── attack_detection.py  # Prompt injection detector
 ├── models/
-│   ├── __init__.py
 │   ├── request.py           # PromptInput
 │   ├── response.py          # StageResult, FinalResponse
 │   └── enums.py             # Label, ResponseCode
 ├── config/
-│   ├── __init__.py
-│   └── settings.py          # Settings (Pydantic BaseSettings)
-├── resources/
-│   ├── keywords_crisis.yaml
-│   ├── keywords_malign.yaml
-│   └── bypass_patterns.yaml
-└── api/
-    ├── __init__.py
-    ├── app.py               # FastAPI app factory
-    ├── router.py            # /v1/evaluate, /health
-    └── middleware.py        # Logging, correlation-id
+│   └── settings.py          # Environment settings
+├── api/
+│   ├── app.py               # FastAPI app factory
+│   ├── router.py            # /v1/evaluate, /health
+│   └── inspect_router.py    # /v1/inspect (debug)
+└── resources/
+    ├── keywords_crisis.yaml
+    ├── keywords_malign.yaml
+    └── bypass_patterns.yaml
 ```
 
-## Diagrama de Clases
+### Class Diagram
 
 ```
-                        ┌──────────────────────────┐
-                        │    GuardrailStage (ABC)  │
-                        │──────────────────────────│
-                        │ + name: str              │
-                        │ + enabled: bool          │
-                        │──────────────────────────│
-                        │ + process(PromptInput)   │
-                        │   -> StageResult  (abs)  │
-                        └────────────┬─────────────┘
-                                     │ inherits
-                    ┌────────────────┴───────────────┐
-                    │                                │
-       ┌────────────┴──────────┐       ┌─────────────┴───────────┐
-       │  DeterministicStage   │       │   SemanticBERTStage     │
-       │───────────────────────│       │─────────────────────────│
-       │ - _processor:         │       │ - _classifier: Pipeline │
-       │     KeywordProcessor  │       │ - _model_id: str        │
-       │ - _bypass_patterns:   │       │ - _threshold: float     │
-       │     list[re.Pattern]  │       │ - _timeout: int         │
-       │───────────────────────│       │─────────────────────────│
-       │ + process() -> Result │       │ + process() -> Result   │
-       │ - _load_keywords()    │       │ - _load_model()         │
-       │ - _check_bypass()     │       │ - _run_inference()      │
-       └───────────────────────┘       └─────────────────────────┘
+                    ┌──────────────────────────┐
+                    │    GuardrailStage (ABC)  │
+                    │──────────────────────────│
+                    │ + name: str              │
+                    │ + process(PromptInput)   │
+                    │   -> StageResult         │
+                    └────────────┬─────────────┘
+                                 │
+        ┌────────────────────────┼────────────────────────┐
+        │                        │                        │
+        ▼                        ▼                        ▼
+┌───────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
+│ DeterministicStage│  │  SemanticBERTStage  │  │AttackDetectionStage │
+│───────────────────│  │─────────────────────│  │─────────────────────│
+│ FlashText keywords│  │ HuggingFace pipeline│  │ DeBERTa classifier  │
+│ Regex patterns    │  │ Lazy model loading  │  │ Injection detection │
+│ O(n) matching     │  │ Thread-safe init    │  │ Inherits Semantic   │
+└───────────────────┘  └─────────────────────┘  └─────────────────────┘
 
-                        ┌──────────────────────────┐
-                        │    SafeguardPipeline     │
-                        │──────────────────────────│
-                        │ - _stages: list[         │
-                        │     GuardrailStage]      │
-                        │──────────────────────────│
-                        │ + evaluate(PromptInput)  │
-                        │   -> FinalResponse       │
-                        │ - _run_stages()          │
-                        │ - _merge_results()       │
-                        │ - _build_response()      │
-                        └──────────────────────────┘
+                    ┌──────────────────────────┐
+                    │    SafeguardPipeline     │
+                    │──────────────────────────│
+                    │ + evaluate(PromptInput)  │
+                    │   -> FinalResponse       │
+                    │ + evaluate_with_trace()  │
+                    │   -> PipelineTrace       │
+                    └──────────────────────────┘
 ```
 
-### Regla de Precedencia de Etiquetas (Short-Circuit)
+## Pipeline Stages
 
-Este es el contrato de comportamiento del pipeline, no solo de datos:
+### 1. DeterministicStage
 
-* REGLA 1 — Short-circuit inmediato:
-  Si cualquier stage devuelve label=Crisis o label=Maligna
-  con short_circuit=True → pipeline se detiene, no ejecuta stages restantes.
+Fast keyword and pattern matching using FlashText (Aho-Corasick algorithm, O(n) complexity).
 
-* REGLA 2 — Precedencia en merge (si ambos stages completan):
-  Crisis > Maligna > Server Error > Válida
-* REGLA 3 — Fail-closed absoluto:
-  Cualquier excepción no manejada en evaluate() →
-  FinalResponse(code=500, etiqueta="Server Error", ...)
-  El texto original NUNCA se incluye en el response de error.
+**Detection hierarchy:**
 
-## Resumen de la Fase 1
+1. Bypass patterns (prompt injection attempts) → `Malign`
+2. Crisis keywords (C-SSRS categories) → `Crisis`
+3. Malicious keywords → `Malign`
+4. No match → `Valid`
 
-`36 tests, 100% coverage, 0 fallos.`
+**Resources:**
 
-### Entregables de esta fase:
+- `keywords_crisis.yaml`: 7 categories mapped to C-SSRS severity levels
+- `keywords_malign.yaml`: Harmful content patterns
+- `bypass_patterns.yaml`: 12 regex patterns for injection detection
 
-- Infraestructura core:
-    - `GuardrailStage ABC`,
-    - Jerarquía de Excepciones,
-    - `SafeguardPipeline` con short-circuit,
-    - merge por precedencia, y fail-closed handler que jamás propaga excepciones al `caller`.
-- Contratos inmutables:
-    - PromptInput frozen,
-    - StageResult frozen,
-    - FinalResponse completamente tipado.
-    - Ninguna etapa puede mutar el input.
-- Configuración por entorno:
-    - Settings con `get_settings()` cacheado como singleton,
-    - overrideable en tests con `monkeypatch + cache_clear()`.
+### 2. SemanticBERTStage
 
-Una decisión de diseño que vale la pena mencionar: el `_fail_closed_response()` devuelve `texto_procesado=""`
-deliberadamente.
-El prompt original solo viaja en la respuesta cuando el sistema procesó exitosamente — un fallo de integridad no debe
-filtrar el input hacia el caller.
+Clinical text classification using HuggingFace transformers.
 
-## Resumen de la Fase 2
+**Model:** `mental/mental-bert-base-uncased`
 
-`68/68 tests, 100% coverage.`
+- Fine-tuned on mental health crisis datasets
+- Detects semantic indicators of crisis situations
 
-### Entregables de esta fase:
+**Design features:**
 
-- DeterministicStage — FlashText (Aho-Corasick O(n)) para keywords, regex compilado en startup para bypass patterns.
-- Jerarquía de evaluación: bypass → crisis → malign → válido.
-- 3 archivos YAML referenciados con fuentes primarias en cada sección:
-    1. keywords_crisis.yaml — 7 categorías mapeadas a los 10 niveles del C-SSRS (Posner et al., 2011; FDA gold standard
-       2012)
-    2. keywords_malign.yaml — daño a terceros + misuse clínico + facilitación ilegal
-    3. bypass_patterns.yaml — 12 patrones regex con IDs estables, basados en OWASP LLM01, Perez (2022), Greshake (2023),
-       Shen (2023)
+- Lazy loading with double-checked locking
+- Injectable pipeline factory for testing
+- Configurable confidence threshold
+- Timeout protection via daemon threads
 
-## Resumen de la Fase 3
+### 3. AttackDetectionStage
 
-`103/103 passed. Coverage 100% en todos los módulos.`
+Semantic prompt injection detection using fine-tuned DeBERTa.
 
-### Entregables de esta fase:
+**Model:** `ProtectAI/deberta-v3-base-prompt-injection-v2`
 
-- SemanticBERTStage — wrapper HuggingFace con cuatro propiedades de diseño que vale la pena mencionar explícitamente:
-    - **Lazy loading + double-checked locking**: El modelo no se carga en `__init__` — el servicio arranca y responde
-      health checks antes de que el modelo esté en memoria. El lock garantiza una sola carga bajo concurrencia sin pagar
-      el costo de sincronización en cada request caliente.
-    - **`pipeline_factory` inyectable**: La dependencia de transformers.pipeline es un parámetro de construcción, no un
-      import hardcodeado. Los 35 tests del módulo corren en `~3` segundos sin GPU, sin descargar nada, sin tocar el
-      filesystem de modelos.
-    - **Timeout via `thread daemon`**: La inferencia corre en un thread daemon con join (`timeout=N`). Si supera el
-      límite, `StageExecutionError(TimeoutError) → pipeline fail-closed`. El thread puede seguir corriendo en background
-      pero al ser daemon no bloquea el proceso.
-      `_DEFAULT_LABEL_MAP` normalizado a MAYÚSCULAS.
+- 0.2B parameters
+- Apache 2.0 license
+- Trained on 7+ security datasets
 
-## Resumen de la Fase 4
+**Labels:**
 
-`156/156 tests. 100% coverage. 0 fallos.`
+- `SAFE` → Valid
+- `INJECTION` → Malign (not Crisis)
 
-### Desglose final por capa:
+## API Reference
 
-| Módulo                    | Test    | Cobertura |
-|---------------------------|---------|-----------|
-| `core/pipeline.py`        | 18 unit | 100%      |
-| `core/exeptions.py`       | 4 units | 100%      |
-| `models`                  | 12 unit | 100%      |
-| `config/settings.py`      | 4 unit  | 100%      |
-| `stages/deterministic.py` | 32 unit | 100%      |
-| `stages/semantic.py`      | 35 unit | 100%      |
-| `api/app.py` + `main.py`  | 11 unit | 100%      |
+### POST /v1/evaluate
 
-### Tres decisiones de esta fase que valen la pena anotar:
+Evaluate a user prompt through the safeguard pipeline.
 
-- `HTTP 200` siempre: Todos los business codes (`100/400/406/500`) viajan en el `JSON`, nunca como `HTTP-Status`.
-  Un retry automático del cliente ante un `HTTP 500` podría reenviar un prompt que el sistema ya decidió bloquear — esto
-  lo elimina por diseño.
-- Lifespan fail-fast: Si los recursos no cargan al startup, el servicio no arranca. No hay modo degradado silencioso. Un
-  servicio de seguridad que no puede garantizar su integridad no debe aceptar tráfico.
-- `TestClient` con `app.state` inyectado. Los tests HTTP no tocan el lifespan en la mayoría de casos — inyectan el
-  pipeline directamente en `app.state`.
-  Esto desacopla los tests de HTTP contract de los tests de startup, sin sacrificar cobertura.
+**Request:**
 
-## Hydra: Configuración Dinámica
-
-Hydra resuelve dos cosas que pydantic-settings no puede:
-
-1. **Composición declarativa**: `pipeline` se describe como una lista ordenada de objetos en YAML, no como flags
-   booleanos. Pasar de 2 a 3 stages, o reordenarlos, es editar el YAML sin tocar Python.
-2. **Instanciación estructurada (_target_)**: Hydra puede instanciar clases Python directamente desde config via
-   hydra.utils.instantiate(). Cada stage se define con _target_: src.stages.semantic.SemanticBERTStage y sus
-   parámetros — esto es el mecanismo que garantiza que solo se pueden crear stages implementados. Si _target_ apunta a
-   una clase que no existe, Hydra falla en startup con un error claro.
-
-### Estructura de archivos a crear/modificar
-
-```
-clinical_safeguard/
-├── conf/                          # NUEVO — directorio raíz de Hydra
-│   ├── config.yaml                # NUEVO — config principal (referencia a grupos)
-│   ├── pipeline/                  # NUEVO — grupo de configuración del pipeline
-│   │   ├── default.yaml           # solo DeterministicStage
-│   │   ├── clinical.yaml          # Deterministic + SemanticBERT
-│   │   └── full.yaml              # Deterministic + SemanticBERT + AttackDetection
-│   └── app/                       # NUEVO — config de la app (host, puerto, etc.)
-│       └── default.yaml
+```json
+{
+  "text": "User prompt text (1-8192 chars)",
+  "session_id": "optional-session-id"
+}
 ```
 
-## Fase Semántica
+**Response:**
 
-### Modelo Crisis Clínica:
+```json
+{
+  "code": 100,
+  "label": "Valid",
+  "data": {
+    "processed_text": "User prompt text",
+    "confidence_score": 0.99,
+    "metadata": {
+      "stage": "deterministic",
+      "triggered_by": null
+    }
+  }
+}
+```
 
-- Modelo elegido: `mental/mental-bert-base-uncased`
-- Razones frente a las alternativas:
-    - fine-tuneado en datasets de crisis [(paper)](https://arxiv.org/abs/2110.15621).
+**Response Codes:**
 
-### Modelo Ataques:
+| Code | Label        | Description                          |
+|------|--------------|--------------------------------------|
+| 100  | Valid        | Prompt is safe to process            |
+| 400  | Malign       | Malicious or policy-violating prompt |
+| 406  | Crisis       | Mental health crisis detected        |
+| 500  | Server Error | System error (fail-closed)           |
 
-- Modelo elegido: `ProtectAI/deberta-v3-base-prompt-injection-v2`
-    - Número de parámetros: **0.2B** (Base)
-    - Arquitectura: DeBERTa v3 Base
+> **Note:** HTTP status is always 200. Business logic codes are in the JSON body to prevent retry loops on blocked
+> prompts.
 
+### GET /health
 
-- Razones frente a las alternativas:
-    - Apache 2.0, entrenado en 7+ datasets públicos de seguridad, diseñado específicamente para detectar prompt
-      injection en aplicaciones LLM, labels documentados y estables.
+Health check endpoint.
 
+**Response:**
 
-- Alternativas adicionales descartadas:
-    - [OWASP JAIL](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html) — no
-      es un modelo, sino un conjunto de patrones regex. Útil como referencia para los bypass patterns, pero no como
-      modelo de clasificación semántica.
-    - `meta-llama/Prompt-Guard-86M` requiere aceptar la licencia de Meta y tiene restricciones comerciales para +700M de
-      usuarios.
+```json
+{
+  "status": "ok",
+  "pipeline": {
+    "stages": [
+      "deterministic",
+      "semantic_bert",
+      "attack_detection"
+    ],
+    "stage_count": 3,
+    "inspect_mode": false
+  }
+}
+```
+
+### POST /v1/inspect
+
+Debug endpoint (requires `SAFEGUARD_INSPECT_MODE=true`).
+
+Returns full pipeline trace with per-stage timing.
+
+## Configuration
+
+### Pipeline Profiles
+
+Located in `conf/pipeline/`:
+
+**default.yaml** — Deterministic only (no models)
+
+```yaml
+stages:
+  - _target_: src.stages.deterministic.DeterministicStage
+    keywords_crisis_path: ${paths.crisis}
+    keywords_malign_path: ${paths.malign}
+    bypass_patterns_path: ${paths.bypass}
+```
+
+**clinical.yaml** — Deterministic + Clinical BERT
+
+```yaml
+stages:
+  - _target_: src.stages.deterministic.DeterministicStage
+    # ... paths ...
+  - _target_: src.stages.semantic.SemanticBERTStage
+    model_id: mental/mental-bert-base-uncased
+    threshold: 0.75
+    inference_timeout_s: 10
+```
+
+**full.yaml** — All three stages
+
+```yaml
+stages:
+  - _target_: src.stages.deterministic.DeterministicStage
+    # ... paths ...
+  - _target_: src.stages.semantic.SemanticBERTStage
+    model_id: mental/mental-bert-base-uncased
+    threshold: 0.75
+    inference_timeout_s: 10
+  - _target_: src.stages.attack_detection.AttackDetectionStage
+    model_id: ProtectAI/deberta-v3-base-prompt-injection-v2
+    threshold: 0.75
+    inference_timeout_s: 10
+```
+
+### Environment Variables
+
+| Variable                 | Default | Description                 |
+|--------------------------|---------|-----------------------------|
+| `HF_TOKEN`               | —       | HuggingFace API token       |
+| `SAFEGUARD_TIMEOUT`      | 10      | Inference timeout (seconds) |
+| `SAFEGUARD_INSPECT_MODE` | false   | Enable /v1/inspect endpoint |
+
+### CLI Overrides
+
+```bash
+# Change pipeline profile
+python main.py pipeline=clinical
+
+# Override specific parameters
+python main.py pipeline=full pipeline.stages.1.threshold=0.9
+
+# Override resource paths
+python main.py paths.crisis=/custom/path/keywords.yaml
+```
+
+## Development
+
+### Setup
+
+```bash
+make create_environment
+source .venv/bin/activate
+make requirements
+```
+
+### Running Tests
+
+```bash
+make test
+
+# With verbose output
+python -m pytest tests/ -v
+
+# Specific test file
+python -m pytest tests/test_pipeline.py -v
+```
+
+### Code Quality
+
+```bash
+# Lint
+make lint
+
+# Format
+make format
+```
+
+### Project Commands
+
+```bash
+make help  # Show all available commands
+```
+
+## Design Decisions
+
+### HTTP 200 Always
+
+All business codes (100/400/406/500) are returned in the JSON body, never as HTTP status codes. This prevents automatic
+retry mechanisms from re-submitting blocked prompts.
+
+### Fail-Fast Startup
+
+If resources fail to load at startup, the service does not start. A security service that cannot guarantee its integrity
+must not accept traffic.
+
+### Label Precedence
+
+When multiple stages complete without short-circuit:
+
+```
+Crisis > Malign > Server Error > Valid
+```
+
+### Short-Circuit Behavior
+
+- `Crisis` or `Malign` detection → Pipeline stops immediately
+- `Valid` → Continue to next stage
+- Any exception → `Server Error` (fail-closed)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+
+- Adding new pipeline stages
+- Extending keyword resources
+- Testing requirements
+
+## License
+
+MIT License — see [LICENSE](LICENSE) for details.
+
+## References
+
+- [C-SSRS](https://cssrs.columbia.edu) — Columbia-Suicide Severity Rating Scale
+- [OWASP LLM Top 10](https://owasp.org/www-project-top-10-for-large-language-model-applications/) — LLM01: Prompt
+  Injection
+- [mental-bert](https://arxiv.org/abs/2110.15621) — Mental Health BERT paper
+- [ProtectAI](https://huggingface.co/ProtectAI/deberta-v3-base-prompt-injection-v2) — Prompt injection detection model
+
