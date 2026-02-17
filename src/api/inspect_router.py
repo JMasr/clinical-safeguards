@@ -27,16 +27,27 @@ inspect_router = APIRouter()
 
 def _trace_to_response(trace: PipelineTrace) -> InspectResponse:
     """
-    Adapter: PipelineTrace (internal dataclass) → InspectResponse (Pydantic).
+    Adapter: PipelineTrace (internal dataclass) -> InspectResponse (Pydantic).
 
     This is the single translation point. If PipelineTrace gains new fields
     (e.g. parallel_group for concurrent stages), this function absorbs the
-    change — external consumers stay stable.
+    change -- external consumers stay stable.
+
+    skipped_stages is derived here rather than stored on PipelineTrace:
+    it is a view computed from all_stage_names minus executed stage names,
+    preserving original registration order.
     """
+    executed_names = {st.result.stage_name for st in trace.stage_traces}
+    skipped = [
+        name for name in trace.all_stage_names
+        if name not in executed_names
+    ]
     stage_responses = [_stage_trace_to_response(st) for st in trace.stage_traces]
     return InspectResponse(
         final=trace.final_response,
         trace=stage_responses,
+        skipped_stages=skipped,
+        total_stages=len(trace.all_stage_names),
         total_duration_ms=trace.total_duration_ms,
     )
 

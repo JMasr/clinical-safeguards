@@ -56,10 +56,28 @@ async def evaluate(request: Request, body: PromptInput) -> JSONResponse:
 @router.get(
     "/health",
     summary="Health check",
-    description="Returns 200 if the service is running and the pipeline is loaded.",
+    description=(
+            "Returns 200 if the service is running and the pipeline is loaded. "
+            "The `pipeline` field lists the active stages in execution order "
+            "and whether inspect mode is enabled."
+    ),
 )
 async def health(request: Request) -> JSONResponse:
     pipeline = getattr(request.app.state, "safeguard_pipeline", None)
     if pipeline is None:
         return JSONResponse(status_code=503, content={"status": "unavailable"})
-    return JSONResponse(status_code=200, content={"status": "ok"})
+
+    import os  # noqa: PLC0415
+    inspect_mode = os.getenv("SAFEGUARD_INSPECT_MODE", "false").lower() == "true"
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "ok",
+            "pipeline": {
+                "stages": list(pipeline.stage_names),
+                "stage_count": len(pipeline.stage_names),
+                "inspect_mode": inspect_mode,
+            },
+        },
+    )

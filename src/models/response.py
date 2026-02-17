@@ -85,10 +85,15 @@ class InspectResponse(BaseModel):
     """
     Full pipeline execution trace returned by /v1/inspect.
 
-    `trace` contains only the stages that actually ran — stages skipped
-    due to short-circuit are absent, which is itself diagnostic information.
+    `trace` contains only the stages that actually ran.
+    `skipped_stages` lists stages that were registered but not executed
+    due to a short-circuit — in execution order. Together, trace +
+    skipped_stages always reconstruct the full pipeline without needing
+    a separate call to /health.
     """
 
     final: FinalResponse
     trace: list[StageTraceResponse]
+    skipped_stages: list[str]
+    total_stages: int = Field(ge=0)
     total_duration_ms: float = Field(ge=0.0)

@@ -44,9 +44,14 @@ class PipelineTrace:
     """
     Full execution record returned by evaluate_with_trace().
     Groups all StageTrace objects with the aggregate timing.
+
+    all_stage_names: ordered names of ALL registered stages, including
+    those not executed due to short-circuit. The HTTP adapter uses this
+    to compute skipped_stages without accessing pipeline internals.
     """
 
     stage_traces: tuple[StageTrace, ...]
+    all_stage_names: tuple[str, ...]
     total_duration_ms: float
     final_response: FinalResponse
 
@@ -78,6 +83,11 @@ class SafeguardPipeline:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    @property
+    def stage_names(self) -> tuple[str, ...]:
+        """Ordered names of all registered stages (executed or not)."""
+        return tuple(s.name for s in self._stages)
 
     def evaluate(self, prompt: PromptInput) -> FinalResponse:
         """
@@ -115,6 +125,7 @@ class SafeguardPipeline:
             total_ms = (time.perf_counter() - t_start) * 1000
             return PipelineTrace(
                 stage_traces=tuple(traces),
+                all_stage_names=self.stage_names,
                 total_duration_ms=round(total_ms, 3),
                 final_response=final,
             )
@@ -126,6 +137,7 @@ class SafeguardPipeline:
             )
             return PipelineTrace(
                 stage_traces=(),
+                all_stage_names=self.stage_names,
                 total_duration_ms=round(total_ms, 3),
                 final_response=self._fail_closed_response(),
             )
